@@ -11,7 +11,7 @@ import {
   TouchableWithoutFeedback,
   ScrollView,
 } from 'react-native';
-import Svg, { Rect, Circle, Line, Path, G, Text as SvgText, Ellipse } from 'react-native-svg';
+import Svg, { Rect, Circle, Line, Path, G, Text as SvgText, Polygon } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
 
@@ -19,7 +19,8 @@ import { Colors, Fonts, Radius, Spacing } from '../theme';
 
 export type Sport    = 'soccer' | 'basketball' | 'football' | 'baseball' | 'volleyball';
 export type PlayCat  = 'offense' | 'defense' | 'set-piece' | 'special';
-type Tool            = 'offense' | 'defense' | 'draw' | 'erase';
+type Tool            = 'offense' | 'defense' | 'ball' | 'draw' | 'erase';
+type DefenseShape    = 'x' | 'triangle' | 'square' | 'diamond';
 type Point           = { x: number; y: number }; // normalized 0–1
 
 export interface PlayToken {
@@ -27,7 +28,8 @@ export interface PlayToken {
   nx: number;
   ny: number;
   label: string;
-  team: 'offense' | 'defense';
+  team: 'offense' | 'defense' | 'ball';
+  shape?: DefenseShape;
 }
 
 export interface PlayRoute {
@@ -74,6 +76,13 @@ const TOOLS: { id: Tool; icon: string; label: string }[] = [
   { id: 'defense', icon: '✕', label: 'DEF'  },
   { id: 'draw',    icon: '✏', label: 'DRAW' },
   { id: 'erase',   icon: '⌫', label: 'ERSR' },
+];
+
+const DEFENSE_SHAPES: { id: DefenseShape; icon: string }[] = [
+  { id: 'x',        icon: '✕' },
+  { id: 'triangle', icon: '△' },
+  { id: 'square',   icon: '▢' },
+  { id: 'diamond',  icon: '◇' },
 ];
 
 // ─── SVG Path helpers ─────────────────────────────────────────────────────────
@@ -188,6 +197,49 @@ export function FieldBackground({ sport, w, h, dim = false }: { sport: Sport; w:
   }
 }
 
+// ─── Defense token shapes ─────────────────────────────────────────────────────
+
+function DefenseToken({ t, px, py }: { t: PlayToken; px: number; py: number }) {
+  switch (t.shape) {
+    case 'triangle': {
+      const r = 19;
+      const pts = `${px},${py - r} ${px - r * 0.866},${py + r * 0.5} ${px + r * 0.866},${py + r * 0.5}`;
+      return (
+        <G key={t.id}>
+          <Polygon points={pts} fill="rgba(61,143,255,0.25)" stroke={Colors.blue} strokeWidth={2} />
+          <SvgText x={px} y={py + 5} textAnchor="middle" fill={Colors.blue} fontSize={10} fontWeight="bold">{t.label}</SvgText>
+        </G>
+      );
+    }
+    case 'square': {
+      const s = 15;
+      return (
+        <G key={t.id}>
+          <Rect x={px - s} y={py - s} width={s * 2} height={s * 2} fill="rgba(212,168,83,0.25)" stroke={Colors.amber} strokeWidth={2} />
+          <SvgText x={px} y={py + 5} textAnchor="middle" fill={Colors.amber} fontSize={10} fontWeight="bold">{t.label}</SvgText>
+        </G>
+      );
+    }
+    case 'diamond': {
+      const d = 19;
+      const pts = `${px},${py - d} ${px + d},${py} ${px},${py + d} ${px - d},${py}`;
+      return (
+        <G key={t.id}>
+          <Polygon points={pts} fill="rgba(0,0,0,0.7)" stroke="rgba(255,255,255,0.7)" strokeWidth={2} />
+          <SvgText x={px} y={py + 5} textAnchor="middle" fill="#fff" fontSize={10} fontWeight="bold">{t.label}</SvgText>
+        </G>
+      );
+    }
+    default: // 'x'
+      return (
+        <G key={t.id}>
+          <Circle cx={px} cy={py} r={17} fill="rgba(231,76,60,0.22)" stroke={Colors.red} strokeWidth={2} />
+          <SvgText x={px} y={py + 9} textAnchor="middle" fill={Colors.red} fontSize={22} fontWeight="bold">✕</SvgText>
+        </G>
+      );
+  }
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function PlayEditorScreen({ navigation, route }: any) {
@@ -205,13 +257,21 @@ export default function PlayEditorScreen({ navigation, route }: any) {
   const [nameInput, setNameInput] = useState(existingPlay?.name ?? 'New Play');
 
   // Refs so PanResponder always sees fresh values (created once)
-  const toolRef    = useRef<Tool>('offense');
-  const tokensRef  = useRef<PlayToken[]>([]);
-  const canvasRef  = useRef({ w: 0, h: 0 });
-  const isDrawing  = useRef(false);
+  const [defenseShape,     setDefenseShape]     = useState<DefenseShape>('x');
+  const [showShapePicker, setShowShapePicker] = useState(false);
 
-  toolRef.current   = tool;
-  tokensRef.current = tokens;
+  const toolRef           = useRef<Tool>('offense');
+  const tokensRef         = useRef<PlayToken[]>([]);
+  const canvasRef         = useRef({ w: 0, h: 0 });
+  const isDrawing         = useRef(false);
+  const draggingTokenId   = useRef<string | null>(null);
+  const defenseShapeRef   = useRef<DefenseShape>('x');
+  const sportRef          = useRef<Sport>('soccer');
+
+  toolRef.current         = tool;
+  tokensRef.current       = tokens;
+  defenseShapeRef.current = defenseShape;
+  sportRef.current        = sport;
 
   const handleLayout = useCallback((e: any) => {
     const { width, height } = e.nativeEvent.layout;
@@ -229,17 +289,30 @@ export default function PlayEditorScreen({ navigation, route }: any) {
       if (!w || viewOnly) return;
       const t = toolRef.current;
 
-      if (t === 'draw') {
-        isDrawing.current = true;
-        setCurrentPath([{ x: lx, y: ly }]);
-      } else if (t === 'offense' || t === 'defense') {
+      if (t === 'offense' || t === 'defense' || t === 'ball') {
+        // Touching an existing token → drag it
+        const hit = tokensRef.current.find(tk =>
+          Math.hypot(tk.nx * w - lx, tk.ny * h - ly) < 25
+        );
+        if (hit) {
+          draggingTokenId.current = hit.id;
+          return;
+        }
+        // Empty canvas → place new token
         setTokens(prev => {
+          if (t === 'ball') {
+            const emoji = SPORTS.find(s => s.id === sportRef.current)?.icon ?? '⚽';
+            return [...prev, { id: `${Date.now()}`, nx: lx / w, ny: ly / h, label: emoji, team: 'ball' }];
+          }
           const count = prev.filter(tk => tk.team === t).length;
           const label = t === 'offense'
             ? String(count + 1)
             : String.fromCharCode(65 + count); // A, B, C…
-          return [...prev, { id: `${Date.now()}`, nx: lx / w, ny: ly / h, label, team: t }];
+          return [...prev, { id: `${Date.now()}`, nx: lx / w, ny: ly / h, label, team: t, shape: t === 'defense' ? defenseShapeRef.current : undefined }];
         });
+      } else if (t === 'draw') {
+        isDrawing.current = true;
+        setCurrentPath([{ x: lx, y: ly }]);
       } else if (t === 'erase') {
         const nx = lx / w, ny = ly / h, thresh = 0.06;
         const tIdx = tokensRef.current.findIndex(tk => Math.hypot(tk.nx - nx, tk.ny - ny) < thresh);
@@ -252,13 +325,29 @@ export default function PlayEditorScreen({ navigation, route }: any) {
     },
 
     onPanResponderMove: (evt) => {
+      const { locationX, locationY } = evt.nativeEvent;
+      const { w, h } = canvasRef.current;
+
+      if (draggingTokenId.current) {
+        const id = draggingTokenId.current;
+        setTokens(prev => prev.map(tk =>
+          tk.id === id
+            ? { ...tk, nx: Math.max(0, Math.min(1, locationX / w)), ny: Math.max(0, Math.min(1, locationY / h)) }
+            : tk
+        ));
+        return;
+      }
+
       if (toolRef.current === 'draw' && isDrawing.current) {
-        const { locationX, locationY } = evt.nativeEvent;
         setCurrentPath(prev => [...prev, { x: locationX, y: locationY }]);
       }
     },
 
     onPanResponderRelease: () => {
+      if (draggingTokenId.current) {
+        draggingTokenId.current = null;
+        return;
+      }
       if (toolRef.current === 'draw' && isDrawing.current) {
         const { w, h } = canvasRef.current;
         setCurrentPath(prev => {
@@ -376,21 +465,35 @@ export default function PlayEditorScreen({ navigation, route }: any) {
             {tokens.map(t => {
               const px = t.nx * canvasSize.w;
               const py = t.ny * canvasSize.h;
+              if (t.team === 'ball') return null; // rendered outside SVG
               return t.team === 'offense' ? (
                 <G key={t.id}>
                   <Circle cx={px} cy={py} r={17} fill={Colors.amber} stroke="rgba(255,255,255,0.85)" strokeWidth={1.5} />
                   <SvgText x={px} y={py + 5} textAnchor="middle" fill="#000" fontSize={13} fontWeight="bold">{t.label}</SvgText>
                 </G>
               ) : (
-                <G key={t.id}>
-                  <Circle cx={px} cy={py} r={17} fill="rgba(231,76,60,0.22)" stroke={Colors.red} strokeWidth={2} />
-                  <SvgText x={px - 7} y={py - 6} fill={Colors.red} fontSize={24} fontWeight="bold">×</SvgText>
-                  <SvgText x={px + 5} y={py + 14} fill={Colors.red} fontSize={9}>{t.label}</SvgText>
-                </G>
+                <DefenseToken key={t.id} t={t} px={px} py={py} />
               );
             })}
           </Svg>
         )}
+
+        {/* Ball tokens — rendered as RN Text (SVG can't display emoji) */}
+        {tokens.filter(t => t.team === 'ball').map(t => (
+          <Text
+            key={t.id}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: t.nx * canvasSize.w - 9,
+              top:  t.ny * canvasSize.h - 9,
+              fontSize: 16,
+              lineHeight: 18,
+            }}
+          >
+            {t.label}
+          </Text>
+        ))}
 
         {/* Empty state hint */}
         {tokens.length === 0 && routes.length === 0 && !viewOnly && (
@@ -400,22 +503,53 @@ export default function PlayEditorScreen({ navigation, route }: any) {
         )}
       </View>
 
+      {/* Defense shape picker — expands above toolbar when DEF tool is active */}
+      {!viewOnly && tool === 'defense' && showShapePicker && (
+        <View style={styles.shapePicker}>
+          {DEFENSE_SHAPES.map(s => (
+            <TouchableOpacity
+              key={s.id}
+              style={[styles.shapeBtn, defenseShape === s.id && styles.shapeBtnActive]}
+              onPress={() => setDefenseShape(s.id)}
+            >
+              <Text style={[styles.shapeBtnIcon, defenseShape === s.id && { color: Colors.red }]}>
+                {s.icon}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {/* Toolbar (hidden in view mode) */}
       {!viewOnly && (
         <View style={styles.toolbar}>
-          <TouchableOpacity
-            style={styles.utilBtn}
-            onPress={() => { setTokens([]); setRoutes([]); }}
-          >
-            <Text style={styles.utilBtnText}>CLR</Text>
-          </TouchableOpacity>
+          <View style={{ alignItems: 'center', gap: 4 }}>
+            <TouchableOpacity
+              style={[styles.toolBtn, tool === 'ball' && styles.toolBtnActive]}
+              onPress={() => { setTool('ball'); setShowShapePicker(false); }}
+            >
+              <Text style={styles.sportBallIcon}>
+                {SPORTS.find(s => s.id === sport)?.icon}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.utilBtn}
+              onPress={() => { setTokens([]); setRoutes([]); }}
+            >
+              <Text style={styles.utilBtnText}>CLR</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.toolBtns}>
             {TOOLS.map(t => (
               <TouchableOpacity
                 key={t.id}
                 style={[styles.toolBtn, tool === t.id && styles.toolBtnActive]}
-                onPress={() => setTool(t.id)}
+                onPress={() => {
+                  setTool(t.id);
+                  if (t.id === 'defense') setShowShapePicker(prev => tool === 'defense' ? !prev : true);
+                  else setShowShapePicker(false);
+                }}
               >
                 <Text style={[styles.toolBtnIcon, tool === t.id && { color: Colors.cyan }]}>{t.icon}</Text>
                 <Text style={[styles.toolBtnLabel, tool === t.id && { color: Colors.cyan }]}>{t.label}</Text>
@@ -430,7 +564,7 @@ export default function PlayEditorScreen({ navigation, route }: any) {
               else if (tokens.length > 0) setTokens(p => p.slice(0, -1));
             }}
           >
-            <Text style={styles.utilBtnText}>⌫</Text>
+            <Text style={styles.utilBtnText}>↩</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -554,4 +688,17 @@ const styles = StyleSheet.create({
   catBtnText:    { fontFamily: Fonts.mono, fontSize: 9, color: Colors.muted, letterSpacing: 1 },
   confirmSaveBtn:     { backgroundColor: Colors.cyan, borderRadius: Radius.md, paddingVertical: 16, alignItems: 'center' },
   confirmSaveBtnText: { fontFamily: Fonts.orbitron, fontSize: 12, color: '#000', letterSpacing: 1 },
+
+  shapePicker: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10,
+    paddingVertical: 8, paddingHorizontal: 12,
+    backgroundColor: 'rgba(4,8,18,0.98)', borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  shapeBtn: {
+    width: 44, height: 44, borderRadius: Radius.md, borderWidth: 1,
+    borderColor: Colors.border, alignItems: 'center', justifyContent: 'center',
+  },
+  shapeBtnActive: { borderColor: `${Colors.red}88`, backgroundColor: 'rgba(231,76,60,0.1)' },
+  shapeBtnIcon:   { fontSize: 20, color: Colors.muted },
+  sportBallIcon:  { fontSize: 11 },
 });
