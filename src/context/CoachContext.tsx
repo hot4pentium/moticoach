@@ -16,7 +16,7 @@ const CoachContext = createContext<CoachContextValue>({
 });
 
 export function CoachProvider({ children }: { children: React.ReactNode }) {
-  const [coachSport, setCoachSport] = useState<Sport>('soccer');
+  const [coachSport, setCoachSport] = useState<Sport>('baseball');
   const [greyScale, setGreyScale] = useState(0);
   return (
     <CoachContext.Provider value={{ coachSport, setCoachSport, greyScale, setGreyScale }}>

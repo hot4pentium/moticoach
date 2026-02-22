@@ -80,7 +80,7 @@ const MOCK_MEMBERS: RosterMember[] = [
   { id: 'p4', role: 'supporter', name: 'David Ellis'    },
 ];
 
-const TEAM_CODE = 'RVR-2025';
+export const TEAM_CODE = 'RVR-2025';
 
 type TabKey = 'all' | 'athlete' | 'staff' | 'supporter';
 const TABS: { key: TabKey; label: string }[] = [

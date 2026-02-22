@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
-import { StatTrackerConfig, PlayerStatLine, SPORT_STATS } from './StatTrackerSetupScreen';
+import { StatTrackerConfig, PlayerStatLine, SPORT_STATS, BASEBALL_BATTING_STATS, BASEBALL_PITCHING_STATS } from './StatTrackerSetupScreen';
 
 export default function StatTrackerSummaryScreen() {
   const navigation = useNavigation<any>();
@@ -27,8 +27,11 @@ export default function StatTrackerSummaryScreen() {
     isOT: boolean;
   } = route.params;
 
-  const stats     = SPORT_STATS[config.sport];
-  const trackedStats = stats.filter(s => (teamStats[s.key] ?? 0) > 0);
+  // Baseball: show both batting and pitching stat categories in the summary
+  const allStats = config.sport === 'baseball'
+    ? [...BASEBALL_BATTING_STATS, ...BASEBALL_PITCHING_STATS]
+    : SPORT_STATS[config.sport];
+  const trackedStats = allStats.filter(s => (teamStats[s.key] ?? 0) > 0);
   const homeWin   = homeScore > oppScore;
   const tied      = homeScore === oppScore;
   const resultLabel = tied ? 'DRAW' : homeWin ? 'WIN' : 'LOSS';
@@ -81,8 +84,9 @@ export default function StatTrackerSummaryScreen() {
         {/* Game info */}
         <View style={styles.gameMeta}>
           <Text style={styles.gameMetaText}>
-            {config.totalPeriods} {config.periodLabel}{config.totalPeriods !== 1 ? 's' : ''}
-            {isOT ? ' + OT' : ''}
+            {config.sport === 'baseball'
+              ? `${config.totalPeriods} INNINGS  ·  ${config.isHomeTeam ? 'HOME' : 'AWAY'}`
+              : `${config.totalPeriods} ${config.periodLabel.toUpperCase()}${config.totalPeriods !== 1 ? 'S' : ''}${isOT ? ' + OT' : ''}`}
             {'  ·  '}{config.sport.toUpperCase()}
             {'  ·  '}{config.trackingMode === 'individual' ? 'INDIVIDUAL' : 'TEAM'} TRACKING
           </Text>

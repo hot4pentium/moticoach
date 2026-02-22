@@ -11,11 +11,15 @@ import {
   Image,
   Animated,
   PanResponder,
+  useWindowDimensions,
 } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
 import { useCoach } from '../context/CoachContext';
+import { TEAM_CODE } from './RosterScreen';
+import { useOnboarding } from '../hooks/useOnboarding';
+import OnboardingTooltip, { TargetLayout } from '../components/OnboardingTooltip';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -202,9 +206,43 @@ function desaturate(color: string, amount: number): string {
 
 export default function DashboardScreen() {
   const { coachSport, greyScale, setGreyScale } = useCoach();
+  const { width: sw, height: sh } = useWindowDimensions();
   const [selectedEvent, setSelectedEvent] = useState<TeamEvent | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [calExpanded, setCalExpanded] = useState(false);
+
+  // Onboarding
+  const onboarding = useOnboarding('dashboard', 3);
+  const motiRef    = useRef<View>(null);
+  const codeRef    = useRef<View>(null);
+  const [motiLayout, setMotiLayout] = useState<TargetLayout | null>(null);
+  const [codeLayout, setCodeLayout] = useState<TargetLayout | null>(null);
+
+  const measureRef = (ref: React.RefObject<View | null>, setter: (l: TargetLayout) => void) => {
+    setTimeout(() => {
+      const node = ref.current as any;
+      // getBoundingClientRect is accurate on web/PWA — use it when available
+      if (node?.getBoundingClientRect) {
+        const rect = node.getBoundingClientRect();
+        if (rect.width > 0) setter({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+      } else {
+        ref.current?.measure((_, __, width, height, pageX, pageY) => {
+          if (width > 0) setter({ x: pageX, y: pageY, width, height });
+        });
+      }
+    }, 200);
+  };
+
+  // Full nav bar: spans entire bottom of screen
+  const navBarLayout: TargetLayout = { x: 0, y: sh - 70, width: sw, height: 70 };
+
+  const TIPS = [
+    { title: 'MEET YOUR MOTI',   body: 'Tap the character to animate it. Daily check-ins, completed tasks, and team wins all help your MOTI grow and unlock new looks.',                                              layout: motiLayout,   arrowSide: 'top'    as const },
+    { title: 'YOUR TEAM CODE',   body: `Share ${TEAM_CODE} with your players — they enter it on signup to auto-join your roster.`,                                                                                    layout: codeLayout,   arrowSide: 'top'    as const },
+    { title: 'YOUR NAVIGATION',  body: 'HOME keeps you on the dashboard. EVENTS manages your schedule. MOTI is your character hub. TOOLS is where you run games — stat tracker, playmaker, prep book and more.',    layout: navBarLayout, arrowSide: 'bottom' as const },
+  ];
+
+  const currentTip = TIPS[onboarding.step];
 
   // Greyscale slider – greyScale lives in context so all subcomponents see it
   const greyScaleRef = useRef(greyScale);
@@ -286,9 +324,13 @@ export default function DashboardScreen() {
           <View style={styles.heroLeft}>
             <Text style={styles.heroTag}>COACH DASHBOARD</Text>
             <Text style={styles.heroName}>Riverside{'\n'}Rockets</Text>
-            <View style={styles.heroTier}>
-              <View style={[styles.tierDot, { backgroundColor: ds(Colors.cyan) }]} />
-              <Text style={[styles.tierText, { color: ds(Colors.cyan) }]}>SEASON ACTIVE</Text>
+            <View
+              ref={codeRef}
+              style={styles.teamCodeChip}
+              onLayout={() => measureRef(codeRef, setCodeLayout)}
+            >
+              <Text style={styles.teamCodeLabel}>CODE</Text>
+              <Text style={styles.teamCodeVal}>{TEAM_CODE}</Text>
             </View>
             <View style={styles.sportBadge}>
               <Text style={styles.sportBadgeText}>
@@ -296,7 +338,9 @@ export default function DashboardScreen() {
               </Text>
             </View>
           </View>
-          <MotiHeroImage />
+          <View ref={motiRef} onLayout={() => measureRef(motiRef, setMotiLayout)}>
+            <MotiHeroImage />
+          </View>
         </View>
 
         {/* Next Event Card */}
@@ -410,6 +454,21 @@ export default function DashboardScreen() {
         visible={sheetVisible}
         onClose={closeSheet}
       />
+
+      {/* Onboarding tooltips */}
+      {!onboarding.isDone && currentTip && (
+        <OnboardingTooltip
+          visible
+          step={onboarding.step}
+          totalSteps={3}
+          title={currentTip.title}
+          body={currentTip.body}
+          targetLayout={currentTip.layout}
+          arrowSide={currentTip.arrowSide}
+          onNext={onboarding.next}
+          onDismiss={onboarding.dismiss}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -885,7 +944,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xl,
-    paddingBottom: Spacing.lg,
+    paddingBottom: 48,
     minHeight: 200,
     backgroundColor: '#000',
   },
@@ -919,6 +978,19 @@ const styles = StyleSheet.create({
   },
   tierDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.cyan },
   tierText: { fontFamily: Fonts.orbitron, fontSize: 9, color: Colors.cyan, letterSpacing: 1.5 },
+  teamCodeChip: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    backgroundColor: 'rgba(0,212,255,0.06)',
+  },
+  teamCodeLabel: { fontFamily: Fonts.mono, fontSize: 7, color: Colors.dim, letterSpacing: 1 },
+  teamCodeVal:   { fontFamily: Fonts.orbitron, fontSize: 10, color: Colors.cyan, letterSpacing: 1.5 },
   sportBadge: {
     marginTop: 6,
     alignSelf: 'flex-start',
@@ -944,6 +1016,7 @@ const styles = StyleSheet.create({
   // Next Event Card
   nextEventCard: {
     marginHorizontal: 36,
+    marginTop: 20,
     marginBottom: 8,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
