@@ -20,6 +20,7 @@ import {
 } from '@expo-google-fonts/rajdhani';
 
 import Navigation from './src/navigation';
+import { CoachProvider } from './src/context/CoachContext';
 import { Colors } from './src/theme';
 
 export default function App() {
@@ -45,8 +46,10 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="light" backgroundColor={Colors.bg} />
-        <Navigation />
+        <CoachProvider>
+          <StatusBar style="light" backgroundColor={Colors.bg} />
+          <Navigation />
+        </CoachProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

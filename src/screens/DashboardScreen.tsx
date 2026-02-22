@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import {
   View,
@@ -9,9 +9,13 @@ import {
   Modal,
   StatusBar,
   Image,
+  Animated,
+  PanResponder,
 } from 'react-native';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
+import { useCoach } from '../context/CoachContext';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -119,6 +123,14 @@ const TYPE_LABEL: Record<EventType, string> = {
   film: 'FILM',
 };
 
+const SPORT_ICON: Record<string, string> = {
+  soccer:     '⚽',
+  basketball: '🏀',
+  football:   '🏈',
+  baseball:   '⚾',
+  volleyball: '🏐',
+};
+
 function getMondayOfWeek(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
@@ -156,12 +168,64 @@ function isToday(date: Date): boolean {
   return isSameDay(date, new Date());
 }
 
+// ─── Colour desaturation utility ─────────────────────────────────────────────
+
+const GREY_SLIDER_W = 60;
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+
+/**
+ * Blend a hex colour toward its greyscale equivalent.
+ * Supports plain 6-char hex (#rrggbb) and 8-char hex+alpha (#rrggbbaa).
+ * amount: 0 = original colour, 1 = fully grey.
+ */
+function desaturate(color: string, amount: number): string {
+  if (amount <= 0) return color;
+  // Handle '#rrggbbaa' (8-char hex with alpha)
+  const hexAlpha = /^#([a-f\d]{6})([a-f\d]{2})$/i.exec(color);
+  const hex6 = hexAlpha ? '#' + hexAlpha[1] : color;
+  const [r, g, b] = hexToRgb(hex6);
+  const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+  const nr = Math.round(r + (lum - r) * amount);
+  const ng = Math.round(g + (lum - g) * amount);
+  const nb = Math.round(b + (lum - b) * amount);
+  if (hexAlpha) {
+    return `rgba(${nr},${ng},${nb},${(parseInt(hexAlpha[2], 16) / 255).toFixed(2)})`;
+  }
+  return `rgb(${nr},${ng},${nb})`;
+}
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
+  const { coachSport, greyScale, setGreyScale } = useCoach();
   const [selectedEvent, setSelectedEvent] = useState<TeamEvent | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [calExpanded, setCalExpanded] = useState(false);
+
+  // Greyscale slider – greyScale lives in context so all subcomponents see it
+  const greyScaleRef = useRef(greyScale);
+  greyScaleRef.current = greyScale; // keep ref fresh on every render
+  const dragStart = useRef(0);
+  const sliderPanHandlers = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        // Invert: right = full colour (0), left = full grey (1)
+        dragStart.current = (1 - greyScaleRef.current) * GREY_SLIDER_W;
+      },
+      onPanResponderMove: (_, { dx }) => {
+        const raw = Math.min(GREY_SLIDER_W, Math.max(0, dragStart.current + dx));
+        setGreyScale(1 - raw / GREY_SLIDER_W);
+      },
+    })
+  ).current.panHandlers;
+
+  // Convenience shorthand used throughout this component's JSX
+  const ds = (color: string) => desaturate(color, greyScale);
 
   const openEvent = useCallback((event: TeamEvent) => {
     setSelectedEvent(event);
@@ -190,8 +254,20 @@ export default function DashboardScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.logo}>
-          MOTI<Text style={{ color: Colors.cyan }}>coach</Text>
+          MOTI<Text style={{ color: ds(Colors.cyan) }}>coach</Text>
         </Text>
+
+        {/* Greyscale slider */}
+        <View style={styles.greySliderWrap}>
+          <Text style={styles.greySliderIcon}>◑</Text>
+          <View style={styles.greyTrack}>
+            <View
+              style={[styles.greyThumb, { left: (1 - greyScale) * GREY_SLIDER_W - 8 }]}
+              {...sliderPanHandlers}
+            />
+          </View>
+        </View>
+
         <View style={styles.headerPills}>
           <View style={styles.pill}>
             <Text style={styles.pillText}>LVL 3</Text>
@@ -202,7 +278,8 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <View style={{ flex: 1 }}>
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
 
         {/* Hero */}
         <View style={styles.hero}>
@@ -210,18 +287,16 @@ export default function DashboardScreen() {
             <Text style={styles.heroTag}>COACH DASHBOARD</Text>
             <Text style={styles.heroName}>Riverside{'\n'}Rockets</Text>
             <View style={styles.heroTier}>
-              <View style={styles.tierDot} />
-              <Text style={styles.tierText}>SEASON ACTIVE</Text>
+              <View style={[styles.tierDot, { backgroundColor: ds(Colors.cyan) }]} />
+              <Text style={[styles.tierText, { color: ds(Colors.cyan) }]}>SEASON ACTIVE</Text>
+            </View>
+            <View style={styles.sportBadge}>
+              <Text style={styles.sportBadgeText}>
+                {SPORT_ICON[coachSport] ?? '🏅'}{'  '}{coachSport.toUpperCase()}
+              </Text>
             </View>
           </View>
-          <View style={styles.motiPlaceholder}>
-            <Image
-              source={require('../../assets/moti-nobg.png')}
-              style={styles.motiImage}
-              resizeMode="contain"
-            />
-            <Text style={styles.motiLabel}>PROTO · LV3</Text>
-          </View>
+          <MotiHeroImage />
         </View>
 
         {/* Next Event Card */}
@@ -231,10 +306,10 @@ export default function DashboardScreen() {
             activeOpacity={0.85}
             onPress={() => openEvent(nextEvent)}
           >
-            <View style={[styles.necAccent, { backgroundColor: TYPE_COLOR[nextEvent.type] }]} />
+            <View style={[styles.necAccent, { backgroundColor: ds(TYPE_COLOR[nextEvent.type]) }]} />
             <View style={styles.necTag}>
-              <View style={styles.necDot} />
-              <Text style={styles.necTagText}>
+              <View style={[styles.necDot, { backgroundColor: ds(Colors.cyan) }]} />
+              <Text style={[styles.necTagText, { color: ds(Colors.cyan) }]}>
                 {isToday(nextEvent.date)
                   ? `NEXT ${TYPE_LABEL[nextEvent.type]} • TODAY`
                   : `NEXT ${TYPE_LABEL[nextEvent.type]}`}
@@ -245,42 +320,18 @@ export default function DashboardScreen() {
               🕐 {nextEvent.time}  📍 {nextEvent.location}
               {nextEvent.playerCount ? `  👥 ${nextEvent.playerCount} Players` : ''}
             </Text>
-
-            <View style={styles.necRow}>
-              {/* Prep score */}
-              <View style={styles.prepScoreWrap}>
-                <View style={[styles.prepCircle,
-                  { borderColor: nextEvent.prepPct > 0 ? Colors.amber : Colors.border }]}>
-                  <Text style={[styles.prepNum,
-                    { color: nextEvent.prepPct > 0 ? Colors.amber : Colors.muted }]}>
-                    {nextEvent.prepPct}
-                  </Text>
-                </View>
-                <View>
-                  <Text style={styles.prepLabel}>PREP SCORE</Text>
-                  <Text style={styles.prepSub}>
-                    {nextEvent.prepPct > 0 ? '3 of 6 steps done' : 'Not started'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* CTA */}
-              <TouchableOpacity
-                style={[styles.necCta, { backgroundColor: TYPE_COLOR[nextEvent.type] }]}
-                onPress={() => openEvent(nextEvent)}
-              >
-                <Text style={styles.necCtaText}>▶ PREP NOW</Text>
-              </TouchableOpacity>
-            </View>
           </TouchableOpacity>
         )}
+
+        {/* Section divider */}
+        <View style={styles.sectionDivider} />
 
         {/* Schedule Section */}
         <View style={styles.scheduleSection}>
           <View style={styles.scheduleHead}>
             <Text style={styles.sectionTitle}>SCHEDULE</Text>
             <TouchableOpacity style={styles.addEventBtn}>
-              <Text style={styles.addEventText}>+ ADD EVENT</Text>
+              <Text style={[styles.addEventText, { color: ds(Colors.cyan) }]}>+ ADD EVENT</Text>
             </TouchableOpacity>
           </View>
 
@@ -296,7 +347,7 @@ export default function DashboardScreen() {
             style={styles.expandRow}
             onPress={() => setCalExpanded(prev => !prev)}
           >
-            <Text style={styles.expandText}>
+            <Text style={[styles.expandText, { color: ds(Colors.cyan) }]}>
               {calExpanded ? 'HIDE CALENDAR ▲' : 'SEE FULL CALENDAR ▼'}
             </Text>
           </TouchableOpacity>
@@ -312,11 +363,46 @@ export default function DashboardScreen() {
           ))}
         </View>
 
+        {/* Section divider */}
+        <View style={styles.sectionDivider} />
+
+        {/* Prep Score + CTA */}
+        {nextEvent && (
+          <View style={styles.prepRow}>
+            <View style={styles.prepScoreWrap}>
+              <View style={[styles.prepCircle,
+                { borderColor: nextEvent.prepPct > 0 ? ds(Colors.amber) : Colors.border }]}>
+                <Text style={[styles.prepNum,
+                  { color: nextEvent.prepPct > 0 ? ds(Colors.amber) : Colors.muted }]}>
+                  {nextEvent.prepPct}
+                </Text>
+              </View>
+              <View>
+                <Text style={styles.prepLabel}>PREP SCORE</Text>
+                <Text style={styles.prepSub}>
+                  {nextEvent.prepPct > 0 ? '3 of 6 steps done' : 'Not started'}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.necCta, { backgroundColor: ds(TYPE_COLOR[nextEvent.type]) }]}
+              onPress={() => openEvent(nextEvent)}
+            >
+              <Text style={styles.necCtaText}>▶ PREP NOW</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Section divider */}
+        <View style={styles.sectionDivider} />
+
         {/* Player Pulse */}
         <PlayerPulse />
 
         <View style={{ height: 32 }} />
-      </ScrollView>
+        </ScrollView>
+
+      </View>
 
       {/* Event Preview Sheet */}
       <EventPreviewSheet
@@ -325,6 +411,61 @@ export default function DashboardScreen() {
         onClose={closeSheet}
       />
     </SafeAreaView>
+  );
+}
+
+// ─── Moti Hero Image (video → still fade) ────────────────────────────────────
+
+function MotiHeroImage() {
+  // Video fades OUT when done — still image always visible underneath as fallback
+  const videoOpacity = useRef(new Animated.Value(1)).current;
+
+  const player = useVideoPlayer(
+    require('../../assets/MOTI-Small-File.mp4'),
+    p => {
+      p.loop = false;
+      p.muted = true;
+      p.play();
+    }
+  );
+
+  useEffect(() => {
+    const sub = player.addListener('playToEnd', () => {
+      Animated.timing(videoOpacity, {
+        toValue: 0,
+        duration: 700,
+        useNativeDriver: true,
+      }).start();
+    });
+    return () => sub.remove();
+  }, [player]);
+
+  const handlePress = () => {
+    videoOpacity.setValue(1);
+    player.replay();
+  };
+
+  return (
+    <TouchableOpacity onPress={handlePress} activeOpacity={0.85}>
+      <View style={styles.motiPlaceholder}>
+        {/* Still image always visible underneath */}
+        <Image
+          source={require('../../assets/moti-nobg.png')}
+          style={styles.motiImage}
+          resizeMode="contain"
+        />
+        {/* Video on top — fades out when finished */}
+        <Animated.View style={[styles.motiMediaWrap, { opacity: videoOpacity }]}>
+          <VideoView
+            player={player}
+            style={styles.motiVideo}
+            contentFit="contain"
+            nativeControls={false}
+          />
+        </Animated.View>
+        <Text style={styles.motiLabel}>PROTO · LV3</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -339,6 +480,8 @@ const PULSE_STATS = [
 ];
 
 function PlayerPulse() {
+  const { greyScale } = useCoach();
+  const ds = (color: string) => desaturate(color, greyScale);
   return (
     <View style={pulseStyles.section}>
       <View style={pulseStyles.head}>
@@ -348,14 +491,14 @@ function PlayerPulse() {
       <View style={pulseStyles.grid}>
         {PULSE_STATS.map((stat) => (
           <View key={stat.label} style={pulseStyles.card}>
-            <View style={[pulseStyles.cardBar, { backgroundColor: stat.color }]} />
-            <Text style={[pulseStyles.val, { color: stat.color }]}>{stat.value}</Text>
+            <View style={[pulseStyles.cardBar, { backgroundColor: ds(stat.color) }]} />
+            <Text style={[pulseStyles.val, { color: ds(stat.color) }]}>{stat.value}</Text>
             <Text style={pulseStyles.label}>{stat.label}</Text>
             <Text style={[
               pulseStyles.trend,
-              stat.trendUp === true  && { color: Colors.green },
-              stat.trendUp === false && { color: Colors.red   },
-              stat.trendUp === null  && { color: Colors.dim   },
+              stat.trendUp === true  && { color: ds(Colors.green) },
+              stat.trendUp === false && { color: ds(Colors.red)   },
+              stat.trendUp === null  && { color: Colors.dim        },
             ]}>
               {stat.trend}
             </Text>
@@ -367,7 +510,7 @@ function PlayerPulse() {
 }
 
 const pulseStyles = StyleSheet.create({
-  section: { paddingHorizontal: Spacing.lg, paddingTop: 20 },
+  section: { paddingHorizontal: Spacing.lg, paddingTop: 4 },
   head: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -485,8 +628,10 @@ function DayCard({
   dayLabel: string;
   onPress?: () => void;
 }) {
+  const { greyScale } = useCoach();
+  const ds = (color: string) => desaturate(color, greyScale);
   const hasEvent = !!event;
-  const color = event ? TYPE_COLOR[event.type] : Colors.muted;
+  const color = event ? ds(TYPE_COLOR[event.type]) : Colors.muted;
 
   return (
     <TouchableOpacity
@@ -549,8 +694,11 @@ function EventPreviewSheet({
   onClose: () => void;
 }) {
   const navigation = useNavigation<any>();
+  const { greyScale } = useCoach();
+  const ds = (color: string) => desaturate(color, greyScale);
   if (!event) return null;
-  const color = TYPE_COLOR[event.type];
+  const rawColor = TYPE_COLOR[event.type];
+  const color = ds(rawColor);
 
   const handleStartPrep = () => {
     onClose();
@@ -561,9 +709,9 @@ function EventPreviewSheet({
       });
     }, 300); // let sheet close before navigating
   };
-  const prepColor = event.prepPct >= 80 ? Colors.green
-    : event.prepPct >= 40 ? Colors.amber
-    : Colors.red;
+  const prepColor = event.prepPct >= 80 ? ds(Colors.green)
+    : event.prepPct >= 40 ? ds(Colors.amber)
+    : ds(Colors.red);
 
   return (
     <Modal
@@ -586,7 +734,7 @@ function EventPreviewSheet({
         <View style={styles.sheetBody}>
           {/* Badge */}
           <View style={[styles.sheetBadge,
-            { backgroundColor: `${color}18`, borderColor: `${color}44` }]}>
+            { backgroundColor: ds(rawColor + '18'), borderColor: ds(rawColor + '44') }]}>
             <Text style={[styles.sheetBadgeText, { color }]}>
               {event.type === 'game' ? '⚽' : event.type === 'practice' ? '🏃' : '🎬'}
               {'  '}{TYPE_LABEL[event.type]} DAY
@@ -701,6 +849,36 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
+  // Greyscale slider
+  greySliderWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  greySliderIcon: {
+    fontSize: 13,
+    color: Colors.muted,
+  },
+  greyTrack: {
+    width: GREY_SLIDER_W,
+    height: 3,
+    backgroundColor: Colors.border,
+    borderRadius: 2,
+    position: 'relative',
+  },
+  greyThumb: {
+    position: 'absolute',
+    top: -7,
+    width: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: Colors.text,
+    borderWidth: 2,
+    borderColor: Colors.cyan,
+  },
+
   // Hero
   hero: {
     flexDirection: 'row',
@@ -708,7 +886,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.lg,
-    minHeight: 140,
+    minHeight: 200,
   },
   heroLeft: { flex: 1 },
   heroTag: {
@@ -740,13 +918,32 @@ const styles = StyleSheet.create({
   },
   tierDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.cyan },
   tierText: { fontFamily: Fonts.orbitron, fontSize: 9, color: Colors.cyan, letterSpacing: 1.5 },
-  motiPlaceholder: { width: 100, height: 130, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4 },
-  motiImage: { width: 100, height: 120, position: 'absolute', bottom: 18 },
+  sportBadge: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  sportBadgeText: {
+    fontFamily: Fonts.mono,
+    fontSize: 9,
+    color: Colors.dim,
+    letterSpacing: 1,
+  },
+  motiPlaceholder: { width: 120, height: 190, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4 },
+  motiMediaWrap: { position: 'absolute', bottom: 18, width: 120, height: 178 },
+  motiVideo: { width: '100%', height: '100%' },
+  motiImage: { width: 120, height: 178, position: 'absolute', bottom: 18 },
   motiLabel: { fontFamily: Fonts.mono, fontSize: 8, color: Colors.dim, letterSpacing: 1, marginTop: 4 },
 
   // Next Event Card
   nextEventCard: {
-    marginHorizontal: Spacing.lg,
+    marginHorizontal: 36,
+    marginBottom: 8,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
     backgroundColor: 'rgba(15,35,90,0.95)',
@@ -760,7 +957,18 @@ const styles = StyleSheet.create({
   necTagText: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.cyan, letterSpacing: 2 },
   necTitle: { fontFamily: Fonts.orbitron, fontSize: 22, color: Colors.text, marginBottom: 6 },
   necMeta: { fontFamily: Fonts.rajdhani, fontSize: 12, color: Colors.dim, marginBottom: 14 },
-  necRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  prepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.card2,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
 
   prepScoreWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   prepCircle: {
@@ -787,8 +995,17 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
+  // Section divider
+  sectionDivider: {
+    marginHorizontal: Spacing.lg,
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 20,
+    opacity: 0.6,
+  },
+
   // Schedule
-  scheduleSection: { paddingTop: 20 },
+  scheduleSection: { paddingTop: 0 },
   scheduleHead: {
     flexDirection: 'row',
     alignItems: 'center',

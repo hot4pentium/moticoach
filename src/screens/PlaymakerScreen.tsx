@@ -16,6 +16,7 @@ import {
   FieldBackground,
   pendingPlay, clearPendingPlay,
 } from './PlayEditorScreen';
+import { useCoach } from '../context/CoachContext';
 
 // ─── Mock seed data ───────────────────────────────────────────────────────────
 
@@ -98,7 +99,16 @@ const SEED_PLAYS: Play[] = [
   },
 ];
 
-// ─── Category filter config ───────────────────────────────────────────────────
+// ─── Filter config ────────────────────────────────────────────────────────────
+
+const SPORT_FILTERS: { id: Sport | 'all'; label: string }[] = [
+  { id: 'all',        label: '🏅 ALL'       },
+  { id: 'soccer',     label: '⚽ SOCCER'    },
+  { id: 'basketball', label: '🏀 BASKETBALL' },
+  { id: 'football',   label: '🏈 FOOTBALL'  },
+  { id: 'baseball',   label: '⚾ BASEBALL'  },
+  { id: 'volleyball', label: '🏐 VOLLEYBALL' },
+];
 
 const CAT_FILTERS: { id: PlayCat | 'all'; label: string }[] = [
   { id: 'all',       label: 'ALL'      },
@@ -159,6 +169,7 @@ function PlayThumbnail({ play }: { play: Play }) {
 // ─── Playbook Screen ──────────────────────────────────────────────────────────
 
 export default function PlaymakerScreen({ navigation }: any) {
+  const { coachSport } = useCoach();
   const [plays,     setPlays]     = useState<Play[]>(SEED_PLAYS);
   const [catFilter, setCatFilter] = useState<PlayCat | 'all'>('all');
 
@@ -178,9 +189,10 @@ export default function PlaymakerScreen({ navigation }: any) {
     }
   }, []));
 
-  const filtered = catFilter === 'all'
-    ? plays
-    : plays.filter(p => p.category === catFilter);
+  const filtered = plays.filter(p =>
+    p.sport === coachSport &&
+    (catFilter === 'all' || p.category === catFilter)
+  );
 
   const openEditor = (play?: Play) => {
     navigation.navigate('PlayEditor', play ? { play } : {});
@@ -232,6 +244,7 @@ export default function PlaymakerScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
+      {/* Sport filter */}
       {/* Category filter */}
       <ScrollView
         horizontal

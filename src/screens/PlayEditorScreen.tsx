@@ -10,9 +10,12 @@ import {
   Modal,
   TouchableWithoutFeedback,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import Svg, { Rect, Circle, Line, Path, G, Text as SvgText, Polygon } from 'react-native-svg';
+import Svg, { Rect, Circle, Line, Path, G, Text as SvgText, Polygon, Image as SvgImage } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCoach } from '../context/CoachContext';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
 
 // ─── Types (exported so PlaymakerScreen can use them) ─────────────────────────
@@ -41,6 +44,7 @@ export interface PlayRoute {
 export interface Play {
   id: string;
   name: string;
+  description: string;
   sport: Sport;
   category: PlayCat;
   tokens: PlayToken[];
@@ -119,6 +123,19 @@ export function SoccerField({ w, h, dim = false }: { w: number; h: number; dim?:
   const pw = w * 0.6, ph = h * 0.17;
   const px = (w - pw) / 2;
   const cr = Math.min(w, h) * 0.13;
+
+  // Penalty arc: circle centred on penalty spot (11% of height from endline)
+  const arcR  = h * 0.095;
+  const penDy = ph - h * 0.11;   // distance from pen spot to far edge of box
+  const arcDx = Math.sqrt(Math.max(0, arcR * arcR - penDy * penDy));
+  const arcX1 = w / 2 - arcDx;
+  const arcX2 = w / 2 + arcDx;
+
+  // Goal mouth (protrudes inward from each endline)
+  const gw = w * 0.2;
+  const gh = h * 0.022;
+  const gx = (w - gw) / 2;
+
   return (
     <>
       <Rect x={0} y={0} width={w} height={h} fill={bg} rx={6} opacity={op} />
@@ -129,50 +146,90 @@ export function SoccerField({ w, h, dim = false }: { w: number; h: number; dim?:
       <Line x1={3} y1={h / 2} x2={w - 3} y2={h / 2} stroke={lc} strokeWidth={1.5} />
       <Circle cx={w / 2} cy={h / 2} r={cr} stroke={lc} strokeWidth={1.5} fill="none" />
       <Circle cx={w / 2} cy={h / 2} r={3} fill={lc} />
+
+      {/* Penalty boxes */}
       <Rect x={px} y={3} width={pw} height={ph} stroke={lc} strokeWidth={1.5} fill="none" />
       <Rect x={px} y={h - 3 - ph} width={pw} height={ph} stroke={lc} strokeWidth={1.5} fill="none" />
+
+      {/* 6-yard boxes */}
       <Rect x={w * 0.36} y={3} width={w * 0.28} height={h * 0.042} stroke={lc} strokeWidth={1.5} fill={`rgba(255,255,255,${dim ? 0.04 : 0.08})`} />
       <Rect x={w * 0.36} y={h - 3 - h * 0.042} width={w * 0.28} height={h * 0.042} stroke={lc} strokeWidth={1.5} fill={`rgba(255,255,255,${dim ? 0.04 : 0.08})`} />
+
+      {/* Penalty arcs — D-shape curving away from each goal */}
+      <Path d={`M${arcX1},${3 + ph} A${arcR},${arcR} 0 0,0 ${arcX2},${3 + ph}`} stroke={lc} strokeWidth={1.5} fill="none" />
+      <Path d={`M${arcX1},${h - 3 - ph} A${arcR},${arcR} 0 0,1 ${arcX2},${h - 3 - ph}`} stroke={lc} strokeWidth={1.5} fill="none" />
+
+      {/* Goals — small filled rectangles on each endline */}
+      <Rect x={gx} y={3} width={gw} height={gh} stroke={lc} strokeWidth={1.5} fill={`rgba(255,255,255,${dim ? 0.06 : 0.14})`} />
+      <Rect x={gx} y={h - 3 - gh} width={gw} height={gh} stroke={lc} strokeWidth={1.5} fill={`rgba(255,255,255,${dim ? 0.06 : 0.14})`} />
     </>
   );
 }
 
 export function BasketballCourt({ w, h, dim = false }: { w: number; h: number; dim?: boolean }) {
-  const lc = `rgba(255,255,255,${dim ? 0.18 : 0.32})`;
-  const bg = dim ? '#3a2510' : '#5c3a1c';
-  const kw = w * 0.36, kh = h * 0.23;
-  const kx = (w - kw) / 2;
-  const arc = w * 0.44;
   return (
     <>
-      <Rect x={0} y={0} width={w} height={h} fill={bg} rx={6} />
-      <Rect x={3} y={3} width={w - 6} height={h - 6} stroke={lc} strokeWidth={1.5} fill="none" rx={4} />
-      <Line x1={3} y1={h / 2} x2={w - 3} y2={h / 2} stroke={lc} strokeWidth={1.5} />
-      <Circle cx={w / 2} cy={h / 2} r={w * 0.11} stroke={lc} strokeWidth={1.5} fill="none" />
-      <Rect x={kx} y={3} width={kw} height={kh} stroke={lc} strokeWidth={1.5} fill={`rgba(255,255,255,0.05)`} />
-      <Circle cx={w / 2} cy={3 + kh} r={kw / 2} stroke={lc} strokeWidth={1.5} fill="none" />
-      <Rect x={kx} y={h - 3 - kh} width={kw} height={kh} stroke={lc} strokeWidth={1.5} fill={`rgba(255,255,255,0.05)`} />
-      <Circle cx={w / 2} cy={h - 3 - kh} r={kw / 2} stroke={lc} strokeWidth={1.5} fill="none" />
-      <Path d={`M${w * 0.08},3 A${arc},${arc} 0 0,1 ${w * 0.92},3`} stroke={lc} strokeWidth={1.5} fill="none" />
-      <Path d={`M${w * 0.08},${h - 3} A${arc},${arc} 0 0,0 ${w * 0.92},${h - 3}`} stroke={lc} strokeWidth={1.5} fill="none" />
+      <Rect x={0} y={0} width={w} height={h} fill="#b8975a" rx={6} />
+      <SvgImage
+        href={require('../../assets/Basketball-Court.png')}
+        x={0}
+        y={0}
+        width={w}
+        height={h}
+        preserveAspectRatio="none"
+        opacity={dim ? 0.5 : 1}
+      />
     </>
   );
 }
 
 export function FootballField({ w, h, dim = false }: { w: number; h: number; dim?: boolean }) {
-  const lc = `rgba(255,255,255,${dim ? 0.18 : 0.32})`;
-  const bg = dim ? '#152e15' : '#1b521b';
-  const ezH = h * 0.1;
-  const yardH = (h - ezH * 2) / 10;
   return (
     <>
-      <Rect x={0} y={0} width={w} height={h} fill={bg} rx={6} />
-      <Rect x={3} y={3} width={w - 6} height={ezH} fill={`rgba(212,168,83,${dim ? 0.08 : 0.15})`} stroke={lc} strokeWidth={1.5} />
-      <Rect x={3} y={h - 3 - ezH} width={w - 6} height={ezH} fill={`rgba(212,168,83,${dim ? 0.08 : 0.15})`} stroke={lc} strokeWidth={1.5} />
-      {Array.from({ length: 9 }).map((_, i) => (
-        <Line key={i} x1={3} y1={ezH + yardH * (i + 1) + 3} x2={w - 3} y2={ezH + yardH * (i + 1) + 3} stroke={lc} strokeWidth={i === 4 ? 2 : 1} />
-      ))}
-      <Rect x={3} y={3} width={w - 6} height={h - 6} stroke={lc} strokeWidth={1.5} fill="none" rx={4} />
+      <Rect x={0} y={0} width={w} height={h} fill="#3a6b3a" rx={6} />
+      <SvgImage
+        href={require('../../assets/Football-Field2.png')}
+        x={0}
+        y={0}
+        width={w}
+        height={h}
+        preserveAspectRatio="none"
+        opacity={dim ? 0.5 : 1}
+      />
+    </>
+  );
+}
+
+export function BaseballField({ w, h, dim = false }: { w: number; h: number; dim?: boolean }) {
+  return (
+    <>
+      <Rect x={0} y={0} width={w} height={h} fill="#2d6b27" rx={6} />
+      <SvgImage
+        href={require('../../assets/Baseball-Field.png')}
+        x={0}
+        y={0}
+        width={w}
+        height={h}
+        preserveAspectRatio="none"
+        opacity={dim ? 0.5 : 1}
+      />
+    </>
+  );
+}
+
+export function VolleyballCourt({ w, h, dim = false }: { w: number; h: number; dim?: boolean }) {
+  return (
+    <>
+      <Rect x={0} y={0} width={w} height={h} fill="#c87941" rx={6} />
+      <SvgImage
+        href={require('../../assets/Volleyball-Court.png')}
+        x={0}
+        y={0}
+        width={w}
+        height={h}
+        preserveAspectRatio="none"
+        opacity={dim ? 0.5 : 1}
+      />
     </>
   );
 }
@@ -193,6 +250,8 @@ export function FieldBackground({ sport, w, h, dim = false }: { sport: Sport; w:
     case 'soccer':     return <SoccerField w={w} h={h} dim={dim} />;
     case 'basketball': return <BasketballCourt w={w} h={h} dim={dim} />;
     case 'football':   return <FootballField w={w} h={h} dim={dim} />;
+    case 'baseball':   return <BaseballField w={w} h={h} dim={dim} />;
+    case 'volleyball': return <VolleyballCourt w={w} h={h} dim={dim} />;
     default:           return <DefaultField w={w} h={h} />;
   }
 }
@@ -206,8 +265,8 @@ function DefenseToken({ t, px, py }: { t: PlayToken; px: number; py: number }) {
       const pts = `${px},${py - r} ${px - r * 0.866},${py + r * 0.5} ${px + r * 0.866},${py + r * 0.5}`;
       return (
         <G key={t.id}>
-          <Polygon points={pts} fill="rgba(61,143,255,0.25)" stroke={Colors.blue} strokeWidth={2} />
-          <SvgText x={px} y={py + 5} textAnchor="middle" fill={Colors.blue} fontSize={10} fontWeight="bold">{t.label}</SvgText>
+          <Polygon points={pts} fill={Colors.blue} stroke="#fff" strokeWidth={1.5} />
+          <SvgText x={px} y={py + 5} textAnchor="middle" fill="#fff" fontSize={10} fontWeight="bold">{t.label}</SvgText>
         </G>
       );
     }
@@ -215,8 +274,8 @@ function DefenseToken({ t, px, py }: { t: PlayToken; px: number; py: number }) {
       const s = 15;
       return (
         <G key={t.id}>
-          <Rect x={px - s} y={py - s} width={s * 2} height={s * 2} fill="rgba(212,168,83,0.25)" stroke={Colors.amber} strokeWidth={2} />
-          <SvgText x={px} y={py + 5} textAnchor="middle" fill={Colors.amber} fontSize={10} fontWeight="bold">{t.label}</SvgText>
+          <Rect x={px - s} y={py - s} width={s * 2} height={s * 2} fill={Colors.amber} stroke="#fff" strokeWidth={1.5} />
+          <SvgText x={px} y={py + 5} textAnchor="middle" fill="#000" fontSize={10} fontWeight="bold">{t.label}</SvgText>
         </G>
       );
     }
@@ -225,7 +284,7 @@ function DefenseToken({ t, px, py }: { t: PlayToken; px: number; py: number }) {
       const pts = `${px},${py - d} ${px + d},${py} ${px},${py + d} ${px - d},${py}`;
       return (
         <G key={t.id}>
-          <Polygon points={pts} fill="rgba(0,0,0,0.7)" stroke="rgba(255,255,255,0.7)" strokeWidth={2} />
+          <Polygon points={pts} fill="#1a1a2e" stroke="#fff" strokeWidth={1.5} />
           <SvgText x={px} y={py + 5} textAnchor="middle" fill="#fff" fontSize={10} fontWeight="bold">{t.label}</SvgText>
         </G>
       );
@@ -233,8 +292,8 @@ function DefenseToken({ t, px, py }: { t: PlayToken; px: number; py: number }) {
     default: // 'x'
       return (
         <G key={t.id}>
-          <Circle cx={px} cy={py} r={17} fill="rgba(231,76,60,0.22)" stroke={Colors.red} strokeWidth={2} />
-          <SvgText x={px} y={py + 9} textAnchor="middle" fill={Colors.red} fontSize={22} fontWeight="bold">✕</SvgText>
+          <Circle cx={px} cy={py} r={17} fill={Colors.red} stroke="#fff" strokeWidth={1.5} />
+          <SvgText x={px} y={py + 9} textAnchor="middle" fill="#fff" fontSize={22} fontWeight="bold">✕</SvgText>
         </G>
       );
   }
@@ -246,7 +305,8 @@ export default function PlayEditorScreen({ navigation, route }: any) {
   const existingPlay: Play | undefined = route?.params?.play;
   const viewOnly: boolean = route?.params?.viewOnly ?? false;
 
-  const [sport,    setSport]    = useState<Sport>(existingPlay?.sport    ?? 'soccer');
+  const { coachSport } = useCoach();
+  const sport = existingPlay?.sport ?? coachSport;
   const [category, setCategory] = useState<PlayCat>(existingPlay?.category ?? 'offense');
   const [tool,     setTool]     = useState<Tool>('offense');
   const [tokens,   setTokens]   = useState<PlayToken[]>(existingPlay?.tokens ?? []);
@@ -255,6 +315,7 @@ export default function PlayEditorScreen({ navigation, route }: any) {
   const [canvasSize,  setCanvasSize]  = useState({ w: 0, h: 0 });
   const [saveModal, setSaveModal] = useState(false);
   const [nameInput, setNameInput] = useState(existingPlay?.name ?? 'New Play');
+  const [descInput, setDescInput] = useState(existingPlay?.description ?? '');
 
   // Refs so PanResponder always sees fresh values (created once)
   const [defenseShape,     setDefenseShape]     = useState<DefenseShape>('x');
@@ -364,13 +425,14 @@ export default function PlayEditorScreen({ navigation, route }: any) {
 
   const handleSave = () => {
     const play: Play = {
-      id:        existingPlay?.id ?? `${Date.now()}`,
-      name:      nameInput.trim() || 'Untitled Play',
+      id:          existingPlay?.id ?? `${Date.now()}`,
+      name:        nameInput.trim() || 'Untitled Play',
+      description: descInput.trim(),
       sport,
       category,
       tokens,
       routes,
-      createdAt: existingPlay?.createdAt ?? Date.now(),
+      createdAt:   existingPlay?.createdAt ?? Date.now(),
     };
     setPendingPlay(play);
     setSaveModal(false);
@@ -403,27 +465,6 @@ export default function PlayEditorScreen({ navigation, route }: any) {
         )}
         {viewOnly && <View style={{ width: 50 }} />}
       </View>
-
-      {/* Sport tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.sportScroll}
-        contentContainerStyle={styles.sportScrollContent}
-      >
-        {SPORTS.map(s => (
-          <TouchableOpacity
-            key={s.id}
-            style={[styles.sportTab, sport === s.id && styles.sportTabActive]}
-            onPress={() => !viewOnly && setSport(s.id)}
-          >
-            <Text style={styles.sportTabIcon}>{s.icon}</Text>
-            <Text style={[styles.sportTabLabel, sport === s.id && { color: Colors.cyan }]}>
-              {s.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
 
       {/* Canvas */}
       <View
@@ -468,7 +509,7 @@ export default function PlayEditorScreen({ navigation, route }: any) {
               if (t.team === 'ball') return null; // rendered outside SVG
               return t.team === 'offense' ? (
                 <G key={t.id}>
-                  <Circle cx={px} cy={py} r={17} fill={Colors.amber} stroke="rgba(255,255,255,0.85)" strokeWidth={1.5} />
+                  <Circle cx={px} cy={py} r={17} fill={Colors.amber} stroke="#fff" strokeWidth={1.5} />
                   <SvgText x={px} y={py + 5} textAnchor="middle" fill="#000" fontSize={13} fontWeight="bold">{t.label}</SvgText>
                 </G>
               ) : (
@@ -571,45 +612,60 @@ export default function PlayEditorScreen({ navigation, route }: any) {
 
       {/* Save Modal */}
       <Modal visible={saveModal} transparent animationType="slide" onRequestClose={() => setSaveModal(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <TouchableWithoutFeedback onPress={() => setSaveModal(false)}>
             <View style={StyleSheet.absoluteFill} />
           </TouchableWithoutFeedback>
           <View style={styles.saveSheet}>
             <View style={styles.saveHandle} />
             <Text style={styles.saveTitle}>SAVE PLAY</Text>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.saveFieldLabel}>PLAY NAME</Text>
+              <TextInput
+                style={styles.saveInput}
+                value={nameInput}
+                onChangeText={setNameInput}
+                placeholder="e.g. 4-3-3 High Press"
+                placeholderTextColor={Colors.muted}
+                autoFocus
+                returnKeyType="next"
+              />
 
-            <Text style={styles.saveFieldLabel}>PLAY NAME</Text>
-            <TextInput
-              style={styles.saveInput}
-              value={nameInput}
-              onChangeText={setNameInput}
-              placeholder="e.g. 4-3-3 High Press"
-              placeholderTextColor={Colors.muted}
-              autoFocus
-              returnKeyType="done"
-            />
+              <Text style={styles.saveFieldLabel}>DESCRIPTION</Text>
+              <TextInput
+                style={[styles.saveInput, styles.saveInputMulti]}
+                value={descInput}
+                onChangeText={setDescInput}
+                placeholder="Optional notes about this play..."
+                placeholderTextColor={Colors.muted}
+                multiline
+                numberOfLines={3}
+              />
 
-            <Text style={styles.saveFieldLabel}>CATEGORY</Text>
-            <View style={styles.catRow}>
-              {CATEGORIES.map(c => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[styles.catBtn, category === c.id && styles.catBtnActive]}
-                  onPress={() => setCategory(c.id)}
-                >
-                  <Text style={[styles.catBtnText, category === c.id && { color: Colors.cyan }]}>
-                    {c.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              <Text style={styles.saveFieldLabel}>CATEGORY</Text>
+              <View style={styles.catRow}>
+                {CATEGORIES.map(c => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[styles.catBtn, category === c.id && styles.catBtnActive]}
+                    onPress={() => setCategory(c.id)}
+                  >
+                    <Text style={[styles.catBtnText, category === c.id && { color: Colors.cyan }]}>
+                      {c.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-            <TouchableOpacity style={styles.confirmSaveBtn} onPress={handleSave}>
-              <Text style={styles.confirmSaveBtnText}>✓ SAVE TO PLAYBOOK</Text>
-            </TouchableOpacity>
+              <TouchableOpacity style={[styles.confirmSaveBtn, { marginBottom: 16 }]} onPress={handleSave}>
+                <Text style={styles.confirmSaveBtnText}>✓ SAVE TO PLAYBOOK</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -681,6 +737,11 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.rajdhani, fontSize: 16, color: Colors.text,
     borderBottomWidth: 1, borderBottomColor: Colors.cyan,
     paddingVertical: 8, marginBottom: 20,
+  },
+  saveInputMulti: {
+    borderBottomWidth: 0, borderWidth: 1, borderColor: Colors.cyan,
+    borderRadius: Radius.sm, paddingHorizontal: 10, height: 72,
+    textAlignVertical: 'top',
   },
   catRow:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
   catBtn:        { paddingHorizontal: 14, paddingVertical: 9, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border },
