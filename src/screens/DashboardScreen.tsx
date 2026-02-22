@@ -450,7 +450,7 @@ function MotiHeroImage() {
       <View style={styles.motiPlaceholder}>
         {/* Still image always visible underneath */}
         <Image
-          source={require('../../assets/moti-nobg.png')}
+          source={require('../../assets/MOTIS/0-MOTI.png')}
           style={styles.motiImage}
           resizeMode="contain"
         />
@@ -887,6 +887,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.lg,
     minHeight: 200,
+    backgroundColor: '#000',
   },
   heroLeft: { flex: 1 },
   heroTag: {
@@ -934,7 +935,7 @@ const styles = StyleSheet.create({
     color: Colors.dim,
     letterSpacing: 1,
   },
-  motiPlaceholder: { width: 120, height: 190, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4 },
+  motiPlaceholder: { width: 120, height: 190, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4, backgroundColor: '#000', borderRadius: 12, overflow: 'hidden' },
   motiMediaWrap: { position: 'absolute', bottom: 18, width: 120, height: 178 },
   motiVideo: { width: '100%', height: '100%' },
   motiImage: { width: 120, height: 178, position: 'absolute', bottom: 18 },

@@ -230,6 +230,7 @@ export default function PrepBookScreen({ navigation, route }: any) {
             availableCount={availableCount}
             absentCount={absentCount}
             injuredCount={injuredCount}
+            navigation={navigation}
           />
         )}
 
@@ -308,16 +309,26 @@ export default function PrepBookScreen({ navigation, route }: any) {
 // ─── Step 1: Attendance ───────────────────────────────────────────────────────
 
 function AttendanceStep({
-  roster, onToggle, availableCount, absentCount, injuredCount,
+  roster, onToggle, availableCount, absentCount, injuredCount, navigation,
 }: {
   roster: Player[];
   onToggle: (id: string) => void;
   availableCount: number;
   absentCount: number;
   injuredCount: number;
+  navigation: any;
 }) {
   return (
     <View style={styles.stepContent}>
+      {/* Roster management shortcut */}
+      <TouchableOpacity
+        style={styles.manageRosterBtn}
+        onPress={() => navigation?.navigate('Roster')}
+      >
+        <Text style={styles.manageRosterText}>⚙ SET JERSEYS &amp; POSITIONS</Text>
+        <Text style={styles.manageRosterArrow}>→</Text>
+      </TouchableOpacity>
+
       <View style={styles.summaryRow}>
         <View style={[styles.summaryPill, { borderColor: `${Colors.green}44` }]}>
           <Text style={[styles.summaryVal, { color: Colors.green }]}>{availableCount}</Text>
@@ -1036,6 +1047,20 @@ const styles = StyleSheet.create({
 
   // Shared
   stepContent: { paddingHorizontal: Spacing.lg, paddingTop: 14 },
+  manageRosterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginBottom: 14,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    backgroundColor: 'rgba(61,143,255,0.06)',
+  },
+  manageRosterText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.cyan, letterSpacing: 1 },
+  manageRosterArrow: { fontFamily: Fonts.mono, fontSize: 12, color: Colors.cyan },
   summaryRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   summaryPill: {
     flex: 1, backgroundColor: Colors.card, borderWidth: 1,

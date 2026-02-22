@@ -4,12 +4,20 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
+  Image,
 } from 'react-native';
+
+const MOTI_IMAGES = [
+  require('../../assets/MOTIS/0-MOTI.png'),
+  require('../../assets/MOTIS/1-MOTi.png'),
+  require('../../assets/MOTIS/2-MOTI.png'),
+  require('../../assets/MOTIS/3-MOTI.png'),
+  require('../../assets/MOTIS/4-MOTI.png'),
+  require('../../assets/MOTIS/5-MOTI.png'),
+];
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
 
-const { width } = Dimensions.get('window');
 
 const STAGES = [
   { id: 1, name: 'BOOT', desc: 'System initializing...', xpRequired: 0, unlocked: true },
@@ -53,42 +61,11 @@ export default function MotiScreen() {
         {/* Glow */}
         <View style={styles.glow} />
 
-        {/* Body parts — composited SVGs will replace these */}
-        <View style={styles.motiBody}>
-          {/* Head — always shown */}
-          <View style={styles.head}>
-            <Text style={styles.headEmoji}>🤖</Text>
-          </View>
-
-          {/* Torso — stage 2+ */}
-          {activeStage >= 1 && (
-            <View style={[styles.bodyPart, styles.torso]}>
-              <Text style={styles.bodyPartText}>▬▬▬</Text>
-            </View>
-          )}
-
-          {/* Arms — stage 3+ */}
-          {activeStage >= 2 && (
-            <View style={styles.arms}>
-              <Text style={styles.bodyPartText}>╔</Text>
-              <View style={{ width: 20 }} />
-              <Text style={styles.bodyPartText}>╗</Text>
-            </View>
-          )}
-
-          {/* Legs — locked until stage 4 */}
-          {activeStage >= 3 ? (
-            <View style={styles.arms}>
-              <Text style={styles.bodyPartText}>║</Text>
-              <View style={{ width: 20 }} />
-              <Text style={styles.bodyPartText}>║</Text>
-            </View>
-          ) : (
-            <View style={styles.lockedParts}>
-              <Text style={styles.lockedText}>🔒 LEGS — {STAGES[3].xpRequired} XP</Text>
-            </View>
-          )}
-        </View>
+        <Image
+          source={MOTI_IMAGES[activeStage] ?? MOTI_IMAGES[0]}
+          style={styles.motiImage}
+          resizeMode="contain"
+        />
       </View>
 
       {/* Stage dots */}
@@ -212,32 +189,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cyan,
     opacity: 0.04,
   },
-  motiBody: { alignItems: 'center', gap: 4 },
-  head: { marginBottom: 4 },
-  headEmoji: { fontSize: 72 },
-  bodyPart: { alignItems: 'center' },
-  torso: {},
-  bodyPartText: {
-    fontFamily: Fonts.mono,
-    fontSize: 20,
-    color: Colors.cyan,
-    opacity: 0.7,
-  },
-  arms: { flexDirection: 'row', alignItems: 'center' },
-  lockedParts: {
-    marginTop: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: 'rgba(255,255,255,0.02)',
-  },
-  lockedText: {
-    fontFamily: Fonts.mono,
-    fontSize: 10,
-    color: Colors.muted,
-    letterSpacing: 1,
+  motiImage: {
+    width: 280,
+    height: 280,
   },
 
   // Stage dots

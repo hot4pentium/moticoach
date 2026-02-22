@@ -13,6 +13,11 @@ import MotiScreen       from '../screens/MotiScreen';
 import PlaymakerScreen  from '../screens/PlaymakerScreen';
 import PrepBookScreen   from '../screens/PrepBookScreen';
 import PlayEditorScreen from '../screens/PlayEditorScreen';
+import ToolsScreen      from '../screens/ToolsScreen';
+import RosterScreen              from '../screens/RosterScreen';
+import StatTrackerSetupScreen    from '../screens/StatTrackerSetupScreen';
+import StatTrackerLiveScreen     from '../screens/StatTrackerLiveScreen';
+import StatTrackerSummaryScreen  from '../screens/StatTrackerSummaryScreen';
 
 // ─── Navigators ──────────────────────────────────────────────────────────────
 
@@ -85,10 +90,10 @@ function TabNavigator() {
         }}
       />
       <Tab.Screen
-        name="Playmaker"
-        component={withFilter(PlaymakerScreen)}
+        name="Tools"
+        component={withFilter(ToolsScreen)}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="PLAYS"  icon="clipboard-outline"        focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon label="TOOLS"  icon="grid-outline"             focused={focused} />,
         }}
       />
     </Tab.Navigator>
@@ -102,6 +107,31 @@ export default function Navigation() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Tabs" component={TabNavigator} />
+        <Stack.Screen
+          name="Roster"
+          component={withFilter(RosterScreen)}
+          options={{ animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="StatTrackerSetup"
+          component={withFilter(StatTrackerSetupScreen)}
+          options={{ animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="StatTrackerLive"
+          component={withFilter(StatTrackerLiveScreen)}
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="StatTrackerSummary"
+          component={withFilter(StatTrackerSummaryScreen)}
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="Playmaker"
+          component={withFilter(PlaymakerScreen)}
+          options={{ animation: 'slide_from_bottom' }}
+        />
         <Stack.Screen
           name="PrepBook"
           component={withFilter(PrepBookScreen)}

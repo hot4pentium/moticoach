@@ -235,7 +235,10 @@ export default function PlaymakerScreen({ navigation }: any) {
 
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← BACK</Text>
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>PLAYBOOK</Text>
           <Text style={styles.headerSub}>{plays.length} plays saved</Text>
         </View>
@@ -322,6 +325,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg, paddingVertical: 14,
     backgroundColor: 'rgba(5,10,22,0.98)', borderBottomWidth: 1, borderBottomColor: Colors.border2,
   },
+  backBtn:  { paddingVertical: 6, paddingRight: 12 },
+  backText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.cyan, letterSpacing: 1 },
+  headerCenter: { flex: 1 },
   headerTitle: { fontFamily: Fonts.orbitron, fontSize: 16, color: Colors.text, letterSpacing: 1 },
   headerSub:   { fontFamily: Fonts.mono, fontSize: 8, color: Colors.muted, marginTop: 3, letterSpacing: 0.5 },
   newPlayBtn:  { paddingHorizontal: 14, paddingVertical: 9, borderRadius: Radius.full, backgroundColor: Colors.cyan },
