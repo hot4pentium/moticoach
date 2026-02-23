@@ -6,10 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
 import { StatTrackerConfig, PlayerStatLine, SPORT_STATS, BASEBALL_BATTING_STATS, BASEBALL_PITCHING_STATS } from './StatTrackerSetupScreen';
+import { useCoach } from '../context/CoachContext';
 
 export default function StatTrackerSummaryScreen() {
   const navigation = useNavigation<any>();
   const route      = useRoute<any>();
+  const { addXp }  = useCoach();
 
   const {
     config,
@@ -151,7 +153,11 @@ export default function StatTrackerSummaryScreen() {
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.saveBtn}
-          onPress={() => navigation.navigate('Tabs')}
+          onPress={() => {
+            const statCount = Object.values(teamStats).reduce((s, v) => s + v, 0);
+            addXp(50 + statCount);
+            navigation.navigate('Tabs');
+          }}
         >
           <Text style={styles.saveBtnText}>SAVE &amp; EXIT</Text>
         </TouchableOpacity>

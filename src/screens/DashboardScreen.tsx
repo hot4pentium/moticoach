@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import {
   View,
@@ -8,15 +8,16 @@ import {
   TouchableOpacity,
   Modal,
   StatusBar,
-  Image,
-  Animated,
   PanResponder,
   useWindowDimensions,
 } from 'react-native';
-import { VideoView, useVideoPlayer } from 'expo-video';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
+import MotiHero from '../components/MotiHero';
+import { signOut } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { useCoach } from '../context/CoachContext';
+import { useAuth } from '../context/AuthContext';
 import { TEAM_CODE } from './RosterScreen';
 import { useOnboarding } from '../hooks/useOnboarding';
 import OnboardingTooltip, { TargetLayout } from '../components/OnboardingTooltip';
@@ -205,14 +206,15 @@ function desaturate(color: string, amount: number): string {
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
-  const { coachSport, greyScale, setGreyScale } = useCoach();
+  const { coachSport, greyScale, setGreyScale, teamXp, motiStage } = useCoach();
+  const { user } = useAuth();
   const { width: sw, height: sh } = useWindowDimensions();
   const [selectedEvent, setSelectedEvent] = useState<TeamEvent | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [calExpanded, setCalExpanded] = useState(false);
 
-  // Onboarding
-  const onboarding = useOnboarding('dashboard', 3);
+  // Onboarding — keyed per user so each new account sees it fresh
+  const onboarding = useOnboarding(`dashboard_${user?.uid ?? 'anon'}`, 3);
   const motiRef    = useRef<View>(null);
   const codeRef    = useRef<View>(null);
   const [motiLayout, setMotiLayout] = useState<TargetLayout | null>(null);
@@ -308,11 +310,14 @@ export default function DashboardScreen() {
 
         <View style={styles.headerPills}>
           <View style={styles.pill}>
-            <Text style={styles.pillText}>LVL 3</Text>
+            <Text style={styles.pillText}>LVL {motiStage + 1}</Text>
           </View>
           <View style={[styles.pill, styles.pillAmber]}>
-            <Text style={[styles.pillText, { color: Colors.amber }]}>340 XP</Text>
+            <Text style={[styles.pillText, { color: Colors.amber }]}>{teamXp} XP</Text>
           </View>
+          <TouchableOpacity onPress={() => signOut(auth)} style={styles.exitBtn} hitSlop={8}>
+            <Text style={styles.exitBtnText}>⏻</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -339,7 +344,7 @@ export default function DashboardScreen() {
             </View>
           </View>
           <View ref={motiRef} onLayout={() => measureRef(motiRef, setMotiLayout)}>
-            <MotiHeroImage />
+            <MotiHero motiStage={motiStage} />
           </View>
         </View>
 
@@ -470,61 +475,6 @@ export default function DashboardScreen() {
         />
       )}
     </SafeAreaView>
-  );
-}
-
-// ─── Moti Hero Image (video → still fade) ────────────────────────────────────
-
-function MotiHeroImage() {
-  // Video fades OUT when done — still image always visible underneath as fallback
-  const videoOpacity = useRef(new Animated.Value(1)).current;
-
-  const player = useVideoPlayer(
-    require('../../assets/MOTI-Small-File.mp4'),
-    p => {
-      p.loop = false;
-      p.muted = true;
-      p.play();
-    }
-  );
-
-  useEffect(() => {
-    const sub = player.addListener('playToEnd', () => {
-      Animated.timing(videoOpacity, {
-        toValue: 0,
-        duration: 700,
-        useNativeDriver: true,
-      }).start();
-    });
-    return () => sub.remove();
-  }, [player]);
-
-  const handlePress = () => {
-    videoOpacity.setValue(1);
-    player.replay();
-  };
-
-  return (
-    <TouchableOpacity onPress={handlePress} activeOpacity={0.85}>
-      <View style={styles.motiPlaceholder}>
-        {/* Still image always visible underneath */}
-        <Image
-          source={require('../../assets/MOTIS/0-MOTI.png')}
-          style={styles.motiImage}
-          resizeMode="contain"
-        />
-        {/* Video on top — fades out when finished */}
-        <Animated.View style={[styles.motiMediaWrap, { opacity: videoOpacity }]}>
-          <VideoView
-            player={player}
-            style={styles.motiVideo}
-            contentFit="contain"
-            nativeControls={false}
-          />
-        </Animated.View>
-        <Text style={styles.motiLabel}>PROTO · LV3</Text>
-      </View>
-    </TouchableOpacity>
   );
 }
 
@@ -1007,12 +957,6 @@ const styles = StyleSheet.create({
     color: Colors.dim,
     letterSpacing: 1,
   },
-  motiPlaceholder: { width: 120, height: 190, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4, backgroundColor: '#000', borderRadius: 12, overflow: 'hidden' },
-  motiMediaWrap: { position: 'absolute', bottom: 18, width: 120, height: 178 },
-  motiVideo: { width: '100%', height: '100%' },
-  motiImage: { width: 120, height: 178, position: 'absolute', bottom: 18 },
-  motiLabel: { fontFamily: Fonts.mono, fontSize: 8, color: Colors.dim, letterSpacing: 1, marginTop: 4 },
-
   // Next Event Card
   nextEventCard: {
     marginHorizontal: 36,
@@ -1314,5 +1258,15 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Colors.muted,
     letterSpacing: 1,
+  },
+
+  exitBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginLeft: 2,
+  },
+  exitBtnText: {
+    fontSize: 15,
+    color: Colors.muted,
   },
 });

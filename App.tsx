@@ -21,6 +21,7 @@ import {
 
 import Navigation from './src/navigation';
 import { CoachProvider } from './src/context/CoachContext';
+import { AuthProvider } from './src/context/AuthContext';
 import { Colors } from './src/theme';
 
 export default function App() {
@@ -46,10 +47,12 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <CoachProvider>
-          <StatusBar style="light" backgroundColor={Colors.bg} />
-          <Navigation />
-        </CoachProvider>
+        <AuthProvider>
+          <CoachProvider>
+            <StatusBar style="light" backgroundColor={Colors.bg} />
+            <Navigation />
+          </CoachProvider>
+        </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

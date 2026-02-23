@@ -17,27 +17,28 @@ const MOTI_IMAGES = [
 ];
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
-
+import { useCoach, XP_THRESHOLDS } from '../context/CoachContext';
 
 const STAGES = [
-  { id: 1, name: 'BOOT', desc: 'System initializing...', xpRequired: 0, unlocked: true },
-  { id: 2, name: 'CORE', desc: 'Torso assembly complete', xpRequired: 100, unlocked: true },
-  { id: 3, name: 'REACH', desc: 'Arms deployed', xpRequired: 250, unlocked: true },
-  { id: 4, name: 'STRIDE', desc: 'Legs online', xpRequired: 500, unlocked: false },
-  { id: 5, name: 'PRIME', desc: 'Full form achieved', xpRequired: 1000, unlocked: false },
+  { id: 1, name: 'BOOT',   desc: 'System initializing...',   xpRequired: XP_THRESHOLDS[0] },
+  { id: 2, name: 'CORE',   desc: 'Torso assembly complete',   xpRequired: XP_THRESHOLDS[1] },
+  { id: 3, name: 'REACH',  desc: 'Arms deployed',             xpRequired: XP_THRESHOLDS[2] },
+  { id: 4, name: 'STRIDE', desc: 'Legs online',               xpRequired: XP_THRESHOLDS[3] },
+  { id: 5, name: 'PRIME',  desc: 'Full form achieved',        xpRequired: XP_THRESHOLDS[4] },
 ];
 
-const TEAM_XP = 340;
-
 export default function MotiScreen() {
-  const [activeStage, setActiveStage] = useState(2);
-  const stage = STAGES[activeStage];
+  const { teamXp, motiStage } = useCoach();
+  const [activeStage, setActiveStage] = useState(motiStage);
 
+  const stage = STAGES[activeStage];
   const nextStage = STAGES[activeStage + 1];
-  const xpToNext = nextStage ? nextStage.xpRequired - TEAM_XP : 0;
+  const xpToNext = nextStage ? nextStage.xpRequired - teamXp : 0;
   const currentStageXp = stage.xpRequired;
-  const nextStageXp = nextStage?.xpRequired ?? TEAM_XP;
-  const progress = Math.min((TEAM_XP - currentStageXp) / (nextStageXp - currentStageXp), 1);
+  const nextStageXp = nextStage?.xpRequired ?? teamXp;
+  const progress = nextStage
+    ? Math.min((teamXp - currentStageXp) / (nextStageXp - currentStageXp), 1)
+    : 1;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -70,24 +71,27 @@ export default function MotiScreen() {
 
       {/* Stage dots */}
       <View style={styles.stageDots}>
-        {STAGES.map((s, i) => (
-          <TouchableOpacity
-            key={s.id}
-            onPress={() => s.unlocked && setActiveStage(i)}
-            style={[
-              styles.dot,
-              i === activeStage && styles.dotActive,
-              s.unlocked && i !== activeStage && styles.dotUnlocked,
-            ]}
-          />
-        ))}
+        {STAGES.map((s, i) => {
+          const unlocked = teamXp >= s.xpRequired;
+          return (
+            <TouchableOpacity
+              key={s.id}
+              onPress={() => unlocked && setActiveStage(i)}
+              style={[
+                styles.dot,
+                i === activeStage && styles.dotActive,
+                unlocked && i !== activeStage && styles.dotUnlocked,
+              ]}
+            />
+          );
+        })}
       </View>
 
       {/* XP Bar */}
       <View style={styles.xpSection}>
         <View style={styles.xpTop}>
           <Text style={styles.xpLabel}>TEAM XP</Text>
-          <Text style={styles.xpVal}>{TEAM_XP} / {nextStageXp}</Text>
+          <Text style={styles.xpVal}>{teamXp} / {nextStageXp}</Text>
         </View>
         <View style={styles.xpBar}>
           <View style={[styles.xpFill, { width: `${progress * 100}%` }]} />
@@ -180,6 +184,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    backgroundColor: '#000',
   },
   glow: {
     position: 'absolute',

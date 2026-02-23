@@ -144,57 +144,80 @@ export default function StatTrackerSetupScreen() {
   const { coachSport } = useCoach();
 
   const pc = PERIOD_CONFIG[coachSport];
-  const [selectedGame,    setSelectedGame]    = useState<GameOption>(GAME_OPTIONS[0]);
-  const [totalPeriods,    setTotalPeriods]    = useState(pc.default);
-  const [trackingMode,    setTrackingMode]    = useState<'team' | 'individual'>('individual');
-  const [soccerStructure, setSoccerStructure] = useState<'halves' | 'quarters'>('halves');
-  const [isHomeTeam,      setIsHomeTeam]      = useState(true);
+  const [step,           setStep]           = useState(0);
+  const [selectedGame,   setSelectedGame]   = useState<GameOption>(GAME_OPTIONS[0]);
+  const [totalPeriods,   setTotalPeriods]   = useState(pc.default);
+  const [trackingMode,   setTrackingMode]   = useState<'team' | 'individual'>('individual');
+  const [soccerStructure,setSoccerStructure]= useState<'halves' | 'quarters'>('halves');
+  const [isHomeTeam,     setIsHomeTeam]     = useState(true);
+
+  // Steps: 0 = Select Game, 1 = Sport config (position/structure/periods), 2 = Tracking Mode
+  // For sports with no step 1 content, skip it
+  const hasStep1 = coachSport === 'baseball' || coachSport === 'soccer' ||
+                   (coachSport !== 'baseball' && coachSport !== 'soccer');
+  const totalSteps = 3;
+
+  const STEP_LABELS = ['SELECT GAME', coachSport === 'baseball' ? 'FIELD POSITION' : coachSport === 'soccer' ? 'STRUCTURE' : `${pc.label.toUpperCase()}S`, 'TRACKING MODE'];
 
   const handleSoccerStructure = (s: 'halves' | 'quarters') => {
     setSoccerStructure(s);
     setTotalPeriods(s === 'halves' ? 2 : 4);
   };
 
+  const handleBack = () => {
+    if (step === 0) navigation.goBack();
+    else setStep(s => s - 1);
+  };
+
+  const handleNext = () => {
+    if (step < totalSteps - 1) setStep(s => s + 1);
+    else handleStart();
+  };
+
   const handleStart = () => {
     let periodType: PeriodType = pc.periodType;
     let periodShort             = pc.short;
     let periodLabel             = pc.label;
-
     if (coachSport === 'soccer' && soccerStructure === 'quarters') {
-      periodType  = 'quarters';
-      periodShort = 'Q';
-      periodLabel = 'Quarter';
+      periodType = 'quarters'; periodShort = 'Q'; periodLabel = 'Quarter';
     }
-
     const config: StatTrackerConfig = {
       opponentName: selectedGame.opponent,
       teamName: 'Riverside Rockets',
       sport: coachSport,
-      periodType,
-      periodShort,
-      periodLabel,
-      totalPeriods,
-      trackingMode,
-      isHomeTeam,
+      periodType, periodShort, periodLabel, totalPeriods, trackingMode, isHomeTeam,
     };
     navigation.navigate('StatTrackerLive', { config });
   };
+
+  const isLast = step === totalSteps - 1;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← BACK</Text>
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
+          <Text style={styles.backText}>{step === 0 ? '← BACK' : '← BACK'}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>NEW GAME</Text>
+        {/* Step indicator */}
+        <View style={styles.stepDots}>
+          {Array.from({ length: totalSteps }).map((_, i) => (
+            <View key={i} style={[styles.stepDot, i === step && styles.stepDotActive, i < step && styles.stepDotDone]} />
+          ))}
+        </View>
+      </View>
+
+      {/* Step label */}
+      <View style={styles.stepLabelRow}>
+        <Text style={styles.stepLabel}>{STEP_LABELS[step]}</Text>
+        <Text style={styles.stepCounter}>{step + 1} / {totalSteps}</Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
-        {/* ── Select Game ── */}
-        <SectionLabel label="SELECT GAME" />
-        {GAME_OPTIONS.map(g => (
+        {/* ── Step 0: Select Game ── */}
+        {step === 0 && GAME_OPTIONS.map(g => (
           <TouchableOpacity
             key={g.id}
             style={[styles.gameCard, selectedGame.id === g.id && styles.gameCardActive]}
@@ -214,100 +237,90 @@ export default function StatTrackerSetupScreen() {
           </TouchableOpacity>
         ))}
 
-        {/* ── Soccer: Structure ── */}
-        {coachSport === 'soccer' && (
-          <>
-            <SectionLabel label="STRUCTURE" />
-            <View style={styles.pillRow}>
-              {(['halves', 'quarters'] as const).map(s => (
-                <TouchableOpacity
-                  key={s}
-                  style={[styles.pill, soccerStructure === s && styles.pillActive]}
-                  onPress={() => handleSoccerStructure(s)}
-                >
-                  <Text style={[styles.pillText, soccerStructure === s && styles.pillTextActive]}>
-                    {s === 'halves' ? '2 Halves' : '4 Quarters'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
+        {/* ── Step 1: Sport config ── */}
+        {step === 1 && coachSport === 'soccer' && (
+          <View style={styles.pillRow}>
+            {(['halves', 'quarters'] as const).map(s => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.pill, soccerStructure === s && styles.pillActive]}
+                onPress={() => handleSoccerStructure(s)}
+              >
+                <Text style={[styles.pillText, soccerStructure === s && styles.pillTextActive]}>
+                  {s === 'halves' ? '2 Halves' : '4 Quarters'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
 
-        {/* ── Non-soccer, non-baseball: Period count ── */}
-        {coachSport !== 'soccer' && coachSport !== 'baseball' && (
-          <>
-            <SectionLabel label={`${pc.label.toUpperCase()}S`} hint={`Default for ${coachSport}`} />
-            <View style={styles.pillRow}>
-              {pc.options.map(n => (
-                <TouchableOpacity
-                  key={n}
-                  style={[styles.pill, totalPeriods === n && styles.pillActive]}
-                  onPress={() => setTotalPeriods(n)}
-                >
-                  <Text style={[styles.pillText, totalPeriods === n && styles.pillTextActive]}>
-                    {n} {n === 1 ? pc.label : pc.label + 's'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
+        {step === 1 && coachSport !== 'soccer' && coachSport !== 'baseball' && (
+          <View style={styles.pillRow}>
+            {pc.options.map(n => (
+              <TouchableOpacity
+                key={n}
+                style={[styles.pill, totalPeriods === n && styles.pillActive]}
+                onPress={() => setTotalPeriods(n)}
+              >
+                <Text style={[styles.pillText, totalPeriods === n && styles.pillTextActive]}>
+                  {n} {n === 1 ? pc.label : pc.label + 's'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
 
-        {/* ── Baseball: Home / Away ── */}
-        {coachSport === 'baseball' && (
-          <>
-            <SectionLabel label="FIELD POSITION" hint="Determines batting order" />
-            <View style={styles.pillRow}>
-              {([true, false] as const).map(home => (
-                <TouchableOpacity
-                  key={String(home)}
-                  style={[styles.pill, styles.pillWide, isHomeTeam === home && styles.pillActive]}
-                  onPress={() => setIsHomeTeam(home)}
-                >
-                  <Text style={[styles.pillText, isHomeTeam === home && styles.pillTextActive]}>
-                    {home ? '🏠 HOME  (bat last)' : '✈️ AWAY  (bat first)'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
+        {step === 1 && coachSport === 'baseball' && (
+          <View style={styles.pillRow}>
+            {([true, false] as const).map(home => (
+              <TouchableOpacity
+                key={String(home)}
+                style={[styles.pill, styles.pillWide, isHomeTeam === home && styles.pillActive]}
+                onPress={() => setIsHomeTeam(home)}
+              >
+                <Text style={[styles.pillText, isHomeTeam === home && styles.pillTextActive]}>
+                  {home ? '🏠 HOME  (bat last)' : '✈️ AWAY  (bat first)'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
 
-        {/* ── Tracking Mode ── */}
-        <SectionLabel label="TRACKING MODE" />
-        <View style={styles.modeRow}>
-          <TouchableOpacity
-            style={[styles.modeCard, trackingMode === 'individual' && styles.modeCardActive]}
-            onPress={() => setTrackingMode('individual')}
-          >
-            <Ionicons name="person-outline" size={26}
-              color={trackingMode === 'individual' ? Colors.cyan : Colors.muted} />
-            <Text style={[styles.modeLabel, trackingMode === 'individual' && { color: Colors.cyan }]}>
-              INDIVIDUAL
-            </Text>
-            <Text style={styles.modeSub}>Stats attributed{'\n'}to each player</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.modeCard, trackingMode === 'team' && styles.modeCardActive]}
-            onPress={() => setTrackingMode('team')}
-          >
-            <Ionicons name="people-outline" size={26}
-              color={trackingMode === 'team' ? Colors.cyan : Colors.muted} />
-            <Text style={[styles.modeLabel, trackingMode === 'team' && { color: Colors.cyan }]}>
-              TEAM
-            </Text>
-            <Text style={styles.modeSub}>Track totals{'\n'}without players</Text>
-          </TouchableOpacity>
-        </View>
+        {/* ── Step 2: Tracking Mode ── */}
+        {step === 2 && (
+          <View style={styles.modeRow}>
+            <TouchableOpacity
+              style={[styles.modeCard, trackingMode === 'individual' && styles.modeCardActive]}
+              onPress={() => setTrackingMode('individual')}
+            >
+              <Ionicons name="person-outline" size={26}
+                color={trackingMode === 'individual' ? Colors.cyan : Colors.muted} />
+              <Text style={[styles.modeLabel, trackingMode === 'individual' && { color: Colors.cyan }]}>
+                INDIVIDUAL
+              </Text>
+              <Text style={styles.modeSub}>Stats attributed{'\n'}to each player</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modeCard, trackingMode === 'team' && styles.modeCardActive]}
+              onPress={() => setTrackingMode('team')}
+            >
+              <Ionicons name="people-outline" size={26}
+                color={trackingMode === 'team' ? Colors.cyan : Colors.muted} />
+              <Text style={[styles.modeLabel, trackingMode === 'team' && { color: Colors.cyan }]}>
+                TEAM
+              </Text>
+              <Text style={styles.modeSub}>Track totals{'\n'}without players</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* CTA */}
+      {/* Footer */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.startBtn} onPress={handleStart}>
-          <Text style={styles.startBtnText}>START TRACKING →</Text>
+        <TouchableOpacity style={styles.startBtn} onPress={handleNext}>
+          <Text style={styles.startBtnText}>{isLast ? 'START TRACKING →' : 'NEXT →'}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -339,6 +352,18 @@ const styles = StyleSheet.create({
   title:    { fontFamily: Fonts.orbitron, fontSize: 16, color: Colors.text, letterSpacing: 2 },
 
   scroll: { padding: Spacing.lg, paddingBottom: 0 },
+
+  stepLabelRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.sm,
+  },
+  stepLabel:   { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, letterSpacing: 2 },
+  stepCounter: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.muted, letterSpacing: 1 },
+
+  stepDots:    { flexDirection: 'row', gap: 5 },
+  stepDot:     { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.border2 },
+  stepDotActive: { backgroundColor: Colors.cyan },
+  stepDotDone: { backgroundColor: `${Colors.cyan}66` },
 
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, marginBottom: 10 },
   sectionLabel:    { fontFamily: Fonts.mono, fontSize: 8, color: Colors.dim, letterSpacing: 2, textTransform: 'uppercase' },

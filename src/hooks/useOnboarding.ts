@@ -2,9 +2,14 @@ import { useState, useCallback } from 'react';
 
 export function useOnboarding(key: string, totalSteps: number) {
   const storageKey = `onboarding_${key}`;
-  const isDoneInitially =
-    typeof localStorage !== 'undefined' &&
-    localStorage.getItem(storageKey) === 'done';
+
+  const isDoneInitially = (() => {
+    if (typeof localStorage === 'undefined') return true;
+    if (localStorage.getItem(storageKey) === 'done') return true;
+    // Mark as done immediately — only shows this one load
+    localStorage.setItem(storageKey, 'done');
+    return false;
+  })();
 
   const [step,   setStep]   = useState(0);
   const [isDone, setIsDone] = useState(isDoneInitially);

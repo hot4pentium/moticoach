@@ -25,6 +25,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
 import { useCoach } from '../context/CoachContext';
+import { useAuth } from '../context/AuthContext';
 import { Sport } from './PlayEditorScreen';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -94,35 +95,23 @@ const TABS: { key: TabKey; label: string }[] = [
 
 export default function RosterScreen() {
   const navigation = useNavigation<any>();
-  const { coachSport } = useCoach();
+  const { coachSport, motiStage } = useCoach();
+  const { role } = useAuth();
+  const canEdit = role === 'coach' || role === 'staff';
   const [tab, setTab] = useState<TabKey>('all');
   const [members, setMembers] = useState<RosterMember[]>(MOCK_MEMBERS);
-  const [editing, setEditing] = useState<RosterMember | null>(null);
-  const [editJersey, setEditJersey] = useState('');
-  const [editPosition, setEditPosition] = useState('');
+  const [profile, setProfile] = useState<RosterMember | null>(null);
 
   const filtered = tab === 'all' ? members : members.filter(m => m.role === tab);
 
-  const openEdit = (m: RosterMember) => {
-    setEditing(m);
-    setEditJersey(m.jersey?.toString() ?? '');
-    setEditPosition(m.position ?? '');
-  };
-
-  const saveEdit = () => {
-    if (!editing) return;
-    setMembers(prev => prev.map(m =>
-      m.id === editing.id
-        ? { ...m, jersey: editJersey ? parseInt(editJersey, 10) : m.jersey, position: editPosition || m.position }
-        : m
-    ));
-    setEditing(null);
-  };
-
-  const positions = POSITIONS[coachSport] ?? [];
   const athleteCount   = members.filter(m => m.role === 'athlete').length;
   const staffCount     = members.filter(m => m.role === 'staff').length;
   const supporterCount = members.filter(m => m.role === 'supporter').length;
+
+  const saveProfile = (updated: RosterMember) => {
+    setMembers(prev => prev.map(m => m.id === updated.id ? updated : m));
+    setProfile(updated);
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -163,7 +152,7 @@ export default function RosterScreen() {
             style={styles.motiImg}
             resizeMode="contain"
           />
-          <Text style={styles.motiLabel}>PROTO · LV3</Text>
+          <Text style={styles.motiLabel}>PROTO · LV{motiStage + 1}</Text>
         </View>
       </View>
 
@@ -204,62 +193,21 @@ export default function RosterScreen() {
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => (
-          <MemberRow member={item} onEdit={item.role === 'athlete' ? () => openEdit(item) : undefined} />
+          <MemberRow member={item} onPress={() => setProfile(item)} />
         )}
         ListEmptyComponent={
           <Text style={styles.empty}>No members in this category</Text>
         }
       />
 
-      {/* Edit Modal */}
-      <Modal visible={!!editing} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setEditing(null)} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalWrap}>
-          <View style={styles.modal}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>{editing?.name}</Text>
-            <Text style={styles.modalSub}>Edit jersey number &amp; position</Text>
-
-            {/* Jersey input */}
-            <Text style={styles.fieldLabel}>JERSEY NUMBER</Text>
-            <TextInput
-              style={styles.numberInput}
-              value={editJersey}
-              onChangeText={setEditJersey}
-              keyboardType="number-pad"
-              maxLength={2}
-              placeholder="–"
-              placeholderTextColor={Colors.muted}
-            />
-
-            {/* Position picker */}
-            <Text style={styles.fieldLabel}>POSITION</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posRow}>
-              {positions.map(pos => (
-                <TouchableOpacity
-                  key={pos}
-                  style={[styles.posPill, editPosition === pos && styles.posPillActive]}
-                  onPress={() => setEditPosition(pos)}
-                >
-                  <Text style={[styles.posPillText, editPosition === pos && styles.posPillTextActive]}>
-                    {pos}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {/* Actions */}
-            <View style={styles.modalBtns}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditing(null)}>
-                <Text style={styles.cancelBtnText}>CANCEL</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={saveEdit}>
-                <Text style={styles.saveBtnText}>SAVE</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* Profile Sheet */}
+      <ProfileSheet
+        member={profile}
+        sport={coachSport}
+        canEdit={canEdit}
+        onClose={() => setProfile(null)}
+        onSave={saveProfile}
+      />
 
     </SafeAreaView>
   );
@@ -267,7 +215,7 @@ export default function RosterScreen() {
 
 // ─── Member Row ───────────────────────────────────────────────────────────────
 
-function MemberRow({ member, onEdit }: { member: RosterMember; onEdit?: () => void }) {
+function MemberRow({ member, onPress }: { member: RosterMember; onPress: () => void }) {
   const initials = member.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   const statusColor = member.status === 'injured' ? Colors.amber
@@ -275,12 +223,7 @@ function MemberRow({ member, onEdit }: { member: RosterMember; onEdit?: () => vo
     : Colors.green;
 
   return (
-    <TouchableOpacity
-      style={styles.row}
-      onPress={onEdit}
-      activeOpacity={onEdit ? 0.7 : 1}
-      disabled={!onEdit}
-    >
+    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
       {/* Left: jersey or avatar */}
       {member.role === 'athlete' ? (
         <View style={styles.jersey}>
@@ -319,11 +262,191 @@ function MemberRow({ member, onEdit }: { member: RosterMember; onEdit?: () => vo
             <Text style={[styles.roleBadgeText, { color: Colors.purple }]}>FAN</Text>
           </View>
         )}
-        {onEdit && (
-          <Ionicons name="pencil-outline" size={14} color={Colors.muted} style={{ marginLeft: 8 }} />
-        )}
+        <Ionicons name="chevron-forward-outline" size={14} color={Colors.muted} />
       </View>
     </TouchableOpacity>
+  );
+}
+
+// ─── Profile Sheet ────────────────────────────────────────────────────────────
+
+const ROLE_COLOR: Record<MemberRole, string> = {
+  athlete:   Colors.cyan,
+  staff:     Colors.blue,
+  supporter: Colors.purple,
+};
+
+const STATUS_LABEL: Record<PlayerStatus, string> = {
+  present: 'AVAILABLE',
+  absent:  'ABSENT',
+  injured: 'INJURED',
+};
+
+function ProfileSheet({
+  member,
+  sport,
+  canEdit,
+  onClose,
+  onSave,
+}: {
+  member: RosterMember | null;
+  sport: Sport;
+  canEdit: boolean;
+  onClose: () => void;
+  onSave: (updated: RosterMember) => void;
+}) {
+  const [editJersey,   setEditJersey]   = useState('');
+  const [editPosition, setEditPosition] = useState('');
+  const [editing,      setEditing]      = useState(false);
+
+  // Reset edit state when a new profile opens
+  const prevId = React.useRef<string | null>(null);
+  if (member && member.id !== prevId.current) {
+    prevId.current   = member.id;
+    setEditJersey(member.jersey?.toString() ?? '');
+    setEditPosition(member.position ?? '');
+    setEditing(false);
+  }
+
+  if (!member) return null;
+
+  const color    = ROLE_COLOR[member.role];
+  const initials = member.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const positions = POSITIONS[sport] ?? [];
+
+  const statusColor = member.status === 'injured' ? Colors.amber
+    : member.status === 'absent'  ? Colors.red
+    : Colors.green;
+
+  const handleSave = () => {
+    onSave({
+      ...member,
+      jersey:   editJersey ? parseInt(editJersey, 10) : member.jersey,
+      position: editPosition || member.position,
+    });
+    setEditing(false);
+  };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.modalWrap}
+      >
+        <View style={styles.modal}>
+          {/* Accent bar */}
+          <View style={[styles.sheetAccent, { backgroundColor: color }]} />
+          <View style={styles.modalHandle} />
+
+          {/* Header */}
+          <View style={styles.profileHeader}>
+            {member.role === 'athlete' ? (
+              <View style={[styles.profileJersey, { borderColor: `${color}55` }]}>
+                <Text style={[styles.profileJerseyNum, { color }]}>{member.jersey ?? '–'}</Text>
+              </View>
+            ) : (
+              <View style={[styles.profileAvatar, { backgroundColor: `${color}22` }]}>
+                <Text style={[styles.profileAvatarText, { color }]}>{initials}</Text>
+              </View>
+            )}
+            <View style={styles.profileHeaderInfo}>
+              <Text style={styles.profileName}>{member.name}</Text>
+              <View style={[styles.profileRoleBadge, { borderColor: `${color}44`, backgroundColor: `${color}10` }]}>
+                <Text style={[styles.profileRoleText, { color }]}>
+                  {member.role === 'athlete'  ? (member.position ?? 'ATHLETE')
+                  : member.role === 'staff'   ? (member.staffTitle?.toUpperCase() ?? 'STAFF')
+                  : 'SUPPORTER'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Athlete status */}
+          {member.role === 'athlete' && member.status && (
+            <View style={styles.statusRow}>
+              <View style={[styles.statusPill, { borderColor: `${statusColor}44`, backgroundColor: `${statusColor}10` }]}>
+                <View style={[styles.statusDotSm, { backgroundColor: statusColor }]} />
+                <Text style={[styles.statusText, { color: statusColor }]}>
+                  {STATUS_LABEL[member.status]}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Athlete: edit form */}
+          {member.role === 'athlete' && editing && (
+            <View style={styles.editSection}>
+              <Text style={styles.fieldLabel}>JERSEY NUMBER</Text>
+              <TextInput
+                style={styles.numberInput}
+                value={editJersey}
+                onChangeText={setEditJersey}
+                keyboardType="number-pad"
+                maxLength={2}
+                placeholder="–"
+                placeholderTextColor={Colors.muted}
+              />
+              <Text style={styles.fieldLabel}>POSITION</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posRow}>
+                {positions.map(pos => (
+                  <TouchableOpacity
+                    key={pos}
+                    style={[styles.posPill, editPosition === pos && styles.posPillActive]}
+                    onPress={() => setEditPosition(pos)}
+                  >
+                    <Text style={[styles.posPillText, editPosition === pos && styles.posPillTextActive]}>
+                      {pos}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* XP contribution row */}
+          <View style={styles.xpRow}>
+            <Text style={styles.xpRowLabel}>XP CONTRIBUTION</Text>
+            <Text style={styles.xpRowVal}>— this season</Text>
+          </View>
+
+          {/* Actions — coach/staff only */}
+          {canEdit && (
+            <View style={styles.modalBtns}>
+              {member.role === 'athlete' && !editing && (
+                <TouchableOpacity style={[styles.actionBtn, { borderColor: `${color}44`, backgroundColor: `${color}10` }]} onPress={() => setEditing(true)}>
+                  <Text style={[styles.actionBtnText, { color }]}>✎  EDIT DETAILS</Text>
+                </TouchableOpacity>
+              )}
+              {member.role === 'athlete' && editing && (
+                <>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditing(false)}>
+                    <Text style={styles.cancelBtnText}>CANCEL</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                    <Text style={styles.saveBtnText}>SAVE</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {member.role === 'supporter' && (
+                <TouchableOpacity style={[styles.actionBtn, { borderColor: `${Colors.blue}44`, backgroundColor: `${Colors.blue}10` }]}>
+                  <Text style={[styles.actionBtnText, { color: Colors.blue }]}>⬆  PROMOTE TO STAFF</Text>
+                </TouchableOpacity>
+              )}
+              {member.role === 'staff' && (
+                <TouchableOpacity style={[styles.actionBtn, { borderColor: `${Colors.red}33`, backgroundColor: `${Colors.red}08` }]}>
+                  <Text style={[styles.actionBtnText, { color: Colors.red }]}>⬇  DEMOTE TO SUPPORTER</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Text style={styles.closeBtnText}>CLOSE</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -625,4 +748,91 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnText: { fontFamily: Fonts.orbitron, fontSize: 11, color: '#000', letterSpacing: 1 },
+
+  // Profile sheet
+  sheetAccent: { height: 3, width: '100%' },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingTop: 4,
+    paddingBottom: 16,
+  },
+  profileJersey: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(0,212,255,0.07)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileJerseyNum: { fontFamily: Fonts.orbitron, fontSize: 22 },
+  profileAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileAvatarText: { fontFamily: Fonts.orbitron, fontSize: 18 },
+  profileHeaderInfo: { flex: 1 },
+  profileName: {
+    fontFamily: Fonts.rajdhani,
+    fontSize: 20,
+    color: Colors.text,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  profileRoleBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  profileRoleText: { fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1 },
+
+  statusRow: { marginBottom: 14 },
+  statusPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  statusDotSm: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1 },
+
+  editSection: { marginBottom: 4 },
+
+  xpRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    marginBottom: 4,
+  },
+  xpRowLabel: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, letterSpacing: 1 },
+  xpRowVal:   { fontFamily: Fonts.mono, fontSize: 9, color: Colors.muted, letterSpacing: 0.5 },
+
+  actionBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  actionBtnText: { fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1 },
+
+  closeBtn: { alignItems: 'center', paddingVertical: 14 },
+  closeBtnText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.muted, letterSpacing: 1 },
 });
