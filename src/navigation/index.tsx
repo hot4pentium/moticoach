@@ -73,11 +73,6 @@ function CoachTabs() {
         options={{ tabBarIcon: ({ focused }) => <TabIcon label="HOME"   icon="flash-outline"        focused={focused} /> }}
       />
       <Tab.Screen
-        name="Calendar"
-        component={withFilter(CalendarScreen)}
-        options={{ tabBarIcon: ({ focused }) => <TabIcon label="EVENTS" icon="calendar-outline"     focused={focused} /> }}
-      />
-      <Tab.Screen
         name="Chat"
         component={ChatScreen}
         options={{ tabBarIcon: ({ focused }) => <TabIcon label="CHAT"   icon="chatbubble-outline"   focused={focused} /> }}
@@ -85,7 +80,7 @@ function CoachTabs() {
       <Tab.Screen
         name="Moti"
         component={withFilter(MotiScreen)}
-        options={{ tabBarIcon: ({ focused }) => <TabIcon label="MOTI"   icon="sparkles-outline"     focused={focused} /> }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon label="AWARDS" icon="trophy-outline"       focused={focused} /> }}
       />
       <Tab.Screen
         name="Tools"
@@ -116,7 +111,7 @@ function SupporterTabs() {
       <Tab.Screen
         name="Moti"
         component={withFilter(MotiScreen)}
-        options={{ tabBarIcon: ({ focused }) => <TabIcon label="MOTI"   icon="sparkles-outline"     focused={focused} /> }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon label="AWARDS" icon="trophy-outline"       focused={focused} /> }}
       />
     </Tab.Navigator>
   );
@@ -140,6 +135,7 @@ function CoachStack() {
       <Stack.Screen name="Playmaker"           component={withFilter(PlaymakerScreen)}          options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="PrepBook"            component={withFilter(PrepBookScreen)}           options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="PlayEditor"          component={withFilter(PlayEditorScreen)}         options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="Calendar"            component={withFilter(CalendarScreen)}           options={{ animation: 'slide_from_bottom' }} />
     </Stack.Navigator>
   );
 }

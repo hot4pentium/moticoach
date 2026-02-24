@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -99,6 +99,10 @@ const SEED_PLAYS: Play[] = [
   },
 ];
 
+// ─── Global plays store (for DrillPlanStep access) ───────────────────────────
+
+export let globalPlays: Play[] = SEED_PLAYS;
+
 // ─── Filter config ────────────────────────────────────────────────────────────
 
 const SPORT_FILTERS: { id: Sport | 'all'; label: string }[] = [
@@ -172,6 +176,9 @@ export default function PlaymakerScreen({ navigation }: any) {
   const { coachSport } = useCoach();
   const [plays,     setPlays]     = useState<Play[]>(SEED_PLAYS);
   const [catFilter, setCatFilter] = useState<PlayCat | 'all'>('all');
+
+  // Keep module-level store in sync so DrillPlanStep can read plays without prop drilling
+  useEffect(() => { globalPlays = plays; }, [plays]);
 
   // Pick up any play saved from the editor
   useFocusEffect(useCallback(() => {

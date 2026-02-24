@@ -1,313 +1,152 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  Image,
+  ScrollView,
 } from 'react-native';
-
-const MOTI_IMAGES = [
-  require('../../assets/MOTIS/0-MOTI.png'),
-  require('../../assets/MOTIS/1-MOTi.png'),
-  require('../../assets/MOTIS/2-MOTI.png'),
-  require('../../assets/MOTIS/3-MOTI.png'),
-  require('../../assets/MOTIS/4-MOTI.png'),
-  require('../../assets/MOTIS/5-MOTI.png'),
-];
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
-import { useCoach, XP_THRESHOLDS } from '../context/CoachContext';
-
-const STAGES = [
-  { id: 1, name: 'BOOT',   desc: 'System initializing...',   xpRequired: XP_THRESHOLDS[0] },
-  { id: 2, name: 'CORE',   desc: 'Torso assembly complete',   xpRequired: XP_THRESHOLDS[1] },
-  { id: 3, name: 'REACH',  desc: 'Arms deployed',             xpRequired: XP_THRESHOLDS[2] },
-  { id: 4, name: 'STRIDE', desc: 'Legs online',               xpRequired: XP_THRESHOLDS[3] },
-  { id: 5, name: 'PRIME',  desc: 'Full form achieved',        xpRequired: XP_THRESHOLDS[4] },
-];
+import { useCoach } from '../context/CoachContext';
+import MotiHero from '../components/MotiHero';
+import BadgeShelf from '../components/BadgeShelf';
 
 export default function MotiScreen() {
-  const { teamXp, motiStage } = useCoach();
-  const [activeStage, setActiveStage] = useState(motiStage);
-
-  const stage = STAGES[activeStage];
-  const nextStage = STAGES[activeStage + 1];
-  const xpToNext = nextStage ? nextStage.xpRequired - teamXp : 0;
-  const currentStageXp = stage.xpRequired;
-  const nextStageXp = nextStage?.xpRequired ?? teamXp;
-  const progress = nextStage
-    ? Math.min((teamXp - currentStageXp) / (nextStageXp - currentStageXp), 1)
-    : 1;
+  const { teamXp, motiStage, earnedBadges, gamesTracked } = useCoach();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.motiName}>PROTO</Text>
-        <View style={styles.stageBadge}>
-          <Text style={styles.stageBadgeText}>STAGE {stage.id}</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>ACHIEVEMENTS</Text>
         </View>
-      </View>
 
-      {/* Stage name */}
-      <View style={styles.stageNameWrap}>
-        <Text style={styles.stageTitle}>{stage.name}</Text>
-        <Text style={styles.stageDesc}>{stage.desc}</Text>
-      </View>
-
-      {/* Moti Display */}
-      <View style={styles.motiDisplay}>
-        {/* Glow */}
-        <View style={styles.glow} />
-
-        <Image
-          source={MOTI_IMAGES[activeStage] ?? MOTI_IMAGES[0]}
-          style={styles.motiImage}
-          resizeMode="contain"
-        />
-      </View>
-
-      {/* Stage dots */}
-      <View style={styles.stageDots}>
-        {STAGES.map((s, i) => {
-          const unlocked = teamXp >= s.xpRequired;
-          return (
-            <TouchableOpacity
-              key={s.id}
-              onPress={() => unlocked && setActiveStage(i)}
-              style={[
-                styles.dot,
-                i === activeStage && styles.dotActive,
-                unlocked && i !== activeStage && styles.dotUnlocked,
-              ]}
-            />
-          );
-        })}
-      </View>
-
-      {/* XP Bar */}
-      <View style={styles.xpSection}>
-        <View style={styles.xpTop}>
-          <Text style={styles.xpLabel}>TEAM XP</Text>
-          <Text style={styles.xpVal}>{teamXp} / {nextStageXp}</Text>
+        {/* MOTI character + XP */}
+        <View style={styles.heroSection}>
+          <View style={styles.glow} />
+          <MotiHero motiStage={motiStage} />
+          <View style={styles.xpPill}>
+            <Text style={styles.xpNumber}>{teamXp}</Text>
+            <Text style={styles.xpLabel}> TEAM XP</Text>
+          </View>
         </View>
-        <View style={styles.xpBar}>
-          <View style={[styles.xpFill, { width: `${progress * 100}%` }]} />
-        </View>
-      </View>
 
-      {/* Next unlock */}
-      {xpToNext > 0 && (
-        <View style={styles.nextUnlock}>
-          <Text style={styles.nuLabel}>NEXT UNLOCK</Text>
-          <Text style={styles.nuVal}>+{xpToNext} XP → {nextStage?.name}</Text>
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <MaterialCommunityIcons name="trophy-outline" size={18} color={Colors.amber} />
+            <Text style={[styles.statVal, { color: Colors.amber }]}>{earnedBadges.length}<Text style={styles.statOf}>/{13}</Text></Text>
+            <Text style={styles.statLabel}>BADGES</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCard}>
+            <MaterialCommunityIcons name="lightning-bolt" size={18} color={Colors.cyan} />
+            <Text style={[styles.statVal, { color: Colors.cyan }]}>{teamXp}</Text>
+            <Text style={styles.statLabel}>XP EARNED</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCard}>
+            <MaterialCommunityIcons name="chart-bar" size={18} color={Colors.green} />
+            <Text style={[styles.statVal, { color: Colors.green }]}>{gamesTracked}</Text>
+            <Text style={styles.statLabel}>GAMES</Text>
+          </View>
         </View>
-      )}
 
-      {/* XP Sources */}
-      <View style={styles.xpSources}>
-        <Text style={styles.xpSourcesTitle}>EARN XP TODAY</Text>
-        <View style={styles.sourceRow}>
-          <XpSource label="Check-in" xp="+10" color={Colors.green} />
-          <XpSource label="Prep Task" xp="+15" color={Colors.cyan} />
-          <XpSource label="Game Stats" xp="+50" color={Colors.amber} />
-        </View>
-      </View>
+        {/* Badge shelf */}
+        <BadgeShelf earnedBadges={earnedBadges} />
 
+      </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function XpSource({ label, xp, color }: { label: string; xp: string; color: string }) {
-  return (
-    <TouchableOpacity style={[styles.sourceCard, { borderColor: `${color}33` }]}>
-      <Text style={[styles.sourceXp, { color }]}>{xp}</Text>
-      <Text style={styles.sourceLabel}>{label}</Text>
-    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
+  scroll:    { paddingBottom: 32 },
 
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.sm,
   },
-  motiName: {
+  title: {
     fontFamily: Fonts.orbitron,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     color: Colors.cyan,
     letterSpacing: 3,
   },
-  stageBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.cyan,
-    backgroundColor: 'rgba(0,212,255,0.08)',
-  },
-  stageBadgeText: {
-    fontFamily: Fonts.mono,
-    fontSize: 10,
-    color: Colors.cyan,
-    letterSpacing: 2,
-  },
 
-  stageNameWrap: { alignItems: 'center', paddingBottom: 6 },
-  stageTitle: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 18,
-    fontWeight: '900',
-    color: Colors.text,
-    letterSpacing: 3,
-  },
-  stageDesc: {
-    fontFamily: Fonts.mono,
-    fontSize: 10,
-    color: Colors.dim,
-    marginTop: 3,
-    letterSpacing: 0.5,
-  },
-
-  // Moti display
-  motiDisplay: {
-    flex: 1,
+  heroSection: {
     alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+    paddingVertical: Spacing.lg,
     backgroundColor: '#000',
+    position: 'relative',
+    overflow: 'hidden',
   },
   glow: {
     position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
     backgroundColor: Colors.cyan,
     opacity: 0.04,
   },
-  motiImage: {
-    width: 280,
-    height: 280,
-  },
-
-  // Stage dots
-  stageDots: {
+  xpPill: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 10,
+    alignItems: 'baseline',
+    marginTop: 10,
   },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: Colors.muted,
-  },
-  dotActive: {
-    backgroundColor: Colors.cyan,
-    borderColor: Colors.cyan,
-  },
-  dotUnlocked: {
-    backgroundColor: 'rgba(0,212,255,0.25)',
-    borderColor: Colors.border2,
-  },
-
-  // XP
-  xpSection: { paddingHorizontal: Spacing.xl, paddingBottom: 6 },
-  xpTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 5,
+  xpNumber: {
+    fontFamily: Fonts.orbitron,
+    fontSize: 20,
+    fontWeight: '900',
+    color: Colors.amber,
   },
   xpLabel: {
     fontFamily: Fonts.mono,
-    fontSize: 9,
+    fontSize: 10,
     color: Colors.dim,
     letterSpacing: 1,
   },
-  xpVal: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 11,
-    color: Colors.cyan,
-    fontWeight: '700',
-  },
-  xpBar: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  xpFill: {
-    height: '100%',
-    backgroundColor: Colors.cyan,
-    borderRadius: 3,
-  },
 
-  nextUnlock: {
-    marginHorizontal: Spacing.xl,
-    marginTop: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  nuLabel: {
-    fontFamily: Fonts.mono,
-    fontSize: 9,
-    color: Colors.muted,
-    letterSpacing: 1,
-  },
-  nuVal: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 11,
-    color: Colors.cyan,
-    fontWeight: '700',
-  },
-
-  // XP Sources
-  xpSources: { padding: Spacing.xl, paddingTop: Spacing.lg },
-  xpSourcesTitle: {
-    fontFamily: Fonts.mono,
-    fontSize: 9,
-    color: Colors.dim,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-  },
-  sourceRow: { flexDirection: 'row', gap: 8 },
-  sourceCard: {
-    flex: 1,
+    marginHorizontal: Spacing.xl,
+    marginTop: Spacing.lg,
     backgroundColor: Colors.card,
     borderWidth: 1,
+    borderColor: Colors.border,
     borderRadius: Radius.md,
-    padding: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  statCard: {
+    flex: 1,
     alignItems: 'center',
+    gap: 4,
   },
-  sourceXp: {
+  statDivider: {
+    width: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 4,
+  },
+  statVal: {
     fontFamily: Fonts.orbitron,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
-    marginBottom: 4,
   },
-  sourceLabel: {
+  statOf: {
     fontFamily: Fonts.mono,
-    fontSize: 9,
-    color: Colors.dim,
+    fontSize: 11,
+    color: Colors.muted,
+  },
+  statLabel: {
+    fontFamily: Fonts.mono,
+    fontSize: 8,
+    color: Colors.muted,
     letterSpacing: 1,
   },
 });

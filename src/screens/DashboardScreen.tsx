@@ -14,6 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
 import MotiHero from '../components/MotiHero';
+import BadgeShelf from '../components/BadgeShelf';
+import BadgeUnlockModal from '../components/BadgeUnlockModal';
 import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useCoach } from '../context/CoachContext';
@@ -206,13 +208,12 @@ function desaturate(color: string, amount: number): string {
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
-  const { coachSport, greyScale, setGreyScale, teamXp, motiStage } = useCoach();
+  const { coachSport, greyScale, setGreyScale, teamXp, motiStage, earnedBadges, pendingBadge, clearPendingBadge } = useCoach();
   const { user } = useAuth();
+  const navigation = useNavigation<any>();
   const { width: sw, height: sh } = useWindowDimensions();
   const [selectedEvent, setSelectedEvent] = useState<TeamEvent | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
-  const [calExpanded, setCalExpanded] = useState(false);
-
   // Onboarding — keyed per user so each new account sees it fresh
   const onboarding = useOnboarding(`dashboard_${user?.uid ?? 'anon'}`, 3);
   const motiRef    = useRef<View>(null);
@@ -309,9 +310,6 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.headerPills}>
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>LVL {motiStage + 1}</Text>
-          </View>
           <View style={[styles.pill, styles.pillAmber]}>
             <Text style={[styles.pillText, { color: Colors.amber }]}>{teamXp} XP</Text>
           </View>
@@ -347,6 +345,11 @@ export default function DashboardScreen() {
             <MotiHero motiStage={motiStage} />
           </View>
         </View>
+
+        {/* Badge Shelf */}
+        <BadgeShelf earnedBadges={earnedBadges} />
+
+        <View style={{ height: Spacing.xl }} />
 
         {/* Next Event Card */}
         {nextEvent && (
@@ -391,25 +394,15 @@ export default function DashboardScreen() {
             onEventPress={openEvent}
           />
 
-          {/* Expand toggle */}
+          {/* Full calendar link */}
           <TouchableOpacity
             style={styles.expandRow}
-            onPress={() => setCalExpanded(prev => !prev)}
+            onPress={() => navigation.navigate('Calendar')}
           >
             <Text style={[styles.expandText, { color: ds(Colors.cyan) }]}>
-              {calExpanded ? 'HIDE CALENDAR ▲' : 'SEE FULL CALENDAR ▼'}
+              SEE FULL CALENDAR →
             </Text>
           </TouchableOpacity>
-
-          {/* Remaining weeks — shown when expanded */}
-          {calExpanded && weeks.slice(1).map((weekStart, wi) => (
-            <WeekRow
-              key={wi}
-              weekStart={weekStart}
-              days={getWeekDays(weekStart)}
-              onEventPress={openEvent}
-            />
-          ))}
         </View>
 
         {/* Section divider */}
@@ -452,6 +445,13 @@ export default function DashboardScreen() {
         </ScrollView>
 
       </View>
+
+      {/* Badge Unlock Modal */}
+      <BadgeUnlockModal
+        badge={pendingBadge}
+        motiStage={motiStage}
+        onDismiss={clearPendingBadge}
+      />
 
       {/* Event Preview Sheet */}
       <EventPreviewSheet

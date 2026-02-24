@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,18 @@ import {
   StatusBar,
   TextInput,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { httpsCallable } from 'firebase/functions';
+import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
+import { functions, db } from '../lib/firebase';
+import { useCoach } from '../context/CoachContext';
+import { useAuth } from '../context/AuthContext';
+import { globalPlays } from './PlaymakerScreen';
+import { type Play } from './PlayEditorScreen';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -33,6 +42,32 @@ interface ScoutItem {
   note: string;
   checked: boolean;
   reminder: ReminderOption | null;
+}
+
+interface DrillItem {
+  id: string;
+  name: string;
+  duration: number; // minutes
+  notes: string;
+}
+
+interface SavedDrill {
+  id: string;
+  name: string;
+  duration: number;
+  notes: string;
+}
+
+interface FocusItem {
+  id: string;
+  text: string;
+  detail: string;
+}
+
+interface EquipmentItem {
+  id: string;
+  label: string;
+  checked: boolean;
 }
 
 // ─── Mock Roster ─────────────────────────────────────────────────────────────
@@ -68,6 +103,24 @@ const DEFAULT_GAME_FOCUS_ITEMS: ScoutItem[] = [
   { id: 'g3', title: 'Priority #3 – Set Pieces', note: '3 corner routines drilled',     checked: false, reminder: null },
 ];
 
+const DEFAULT_TRAINING_FOCUS: FocusItem[] = [
+  { id: 'tf1', text: 'Technical – Passing', detail: '' },
+  { id: 'tf2', text: 'Tactical – Shape',    detail: '' },
+];
+
+const SPORT_EQUIPMENT: Record<string, string[]> = {
+  soccer:     ['Soccer balls', 'Cones', 'Bibs / Vests', 'Goals', 'Water bottles', 'First aid kit'],
+  basketball: ['Basketballs', 'Cones', 'Bibs / Vests', 'Water bottles', 'First aid kit'],
+  football:   ['Footballs', 'Cones', 'Tackle pads', 'Blocking sleds', 'Water bottles', 'First aid kit'],
+  baseball:   ['Baseballs', 'Bats', 'Batting helmets', 'Batting tee', 'Catcher gear', 'Bases', 'Water bottles', 'First aid kit'],
+  volleyball: ['Volleyballs', 'Net', 'Antenna / poles', 'Cones', 'Water bottles', 'First aid kit'],
+};
+
+function defaultEquipment(sport: string): EquipmentItem[] {
+  const labels = SPORT_EQUIPMENT[sport] ?? SPORT_EQUIPMENT.soccer;
+  return labels.map((label, i) => ({ id: `eq${i + 1}`, label, checked: false }));
+}
+
 const REMINDER_ROWS = [
   [
     { id: '15min' as ReminderOption, label: '15',    sub: 'MIN BEFORE' },
@@ -83,7 +136,7 @@ const REMINDER_ROWS = [
 
 // ─── Step Config ─────────────────────────────────────────────────────────────
 
-const STEPS = [
+const GAME_STEPS = [
   { id: 1, label: 'Attend.',  title: 'Attendance & Roster',    icon: '👥', desc: 'Mark anyone missing – everyone else is confirmed' },
   { id: 2, label: 'Lineup',   title: 'Starting Lineup',        icon: '📋', desc: 'Set your starting 11, subs, and captain' },
   { id: 3, label: 'Scout',    title: 'Scouting & Opposition',  icon: '🔍', desc: 'Know your opponent before they know you' },
@@ -92,11 +145,20 @@ const STEPS = [
   { id: 6, label: 'Final',    title: 'Final Check',            icon: '✅', desc: 'Confirm everything is ready to go' },
 ];
 
+const PRACTICE_STEPS = [
+  { id: 1, label: 'Attend.',  title: 'Attendance',      icon: '👥', desc: 'Confirm who is showing up today' },
+  { id: 2, label: 'Drills',   title: 'Drill Plan',      icon: '⚡', desc: 'Build your session with drill blocks' },
+  { id: 3, label: 'Focus',    title: 'Training Focus',  icon: '🎯', desc: '2–3 skills or tactical themes for today' },
+  { id: 4, label: 'Gear',     title: 'Equipment Check', icon: '🎒', desc: 'Make sure everything is packed and ready' },
+  { id: 5, label: 'Final',    title: 'Final Check',     icon: '✅', desc: 'Session is planned and ready to go' },
+];
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function PrepBookScreen({ navigation, route }: any) {
-  const eventTitle = route?.params?.eventTitle ?? 'Event';
-  const eventType  = route?.params?.eventType  ?? 'game';
+  const eventTitle  = route?.params?.eventTitle ?? 'Event';
+  const eventType   = route?.params?.eventType  ?? 'game';
+  const { coachSport, addXp } = useCoach();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [roster, setRoster]           = useState<Player[]>(MOCK_ROSTER);
@@ -118,14 +180,34 @@ export default function PrepBookScreen({ navigation, route }: any) {
   const [gameNotes, setGameNotes]           = useState('');
   const [focusConfirmed, setFocusConfirmed] = useState(false);
 
+  // Practice — Drill Plan
+  const [drills, setDrills] = useState<DrillItem[]>([]);
+
+  // Practice — Training Focus
+  const [trainingFocus, setTrainingFocus]         = useState<FocusItem[]>(DEFAULT_TRAINING_FOCUS);
+  const [focusNotes, setFocusNotes]               = useState('');
+  const [practFocusConfirmed, setPractFocusConfirmed] = useState(false);
+
+  // Practice — Equipment
+  const [equipment, setEquipment] = useState<EquipmentItem[]>(() => defaultEquipment(coachSport));
+
+  const isPractice  = eventType === 'practice';
+  const STEPS       = isPractice ? PRACTICE_STEPS : GAME_STEPS;
   const step        = STEPS[currentStep];
   const accentColor = eventType === 'game'     ? Colors.amber
                     : eventType === 'practice' ? Colors.green
                     :                            Colors.purple;
 
   const goNext = () => {
-    setCompletedSteps(prev => [...new Set([...prev, currentStep])]);
-    if (currentStep < STEPS.length - 1) setCurrentStep(s => s + 1);
+    const isFinal = currentStep === STEPS.length - 1;
+    setCompletedSteps(prev => {
+      const next = [...new Set([...prev, currentStep])];
+      if (isFinal && next.length === STEPS.length) {
+        addXp(isPractice ? 15 : 20, isPractice ? 'PRACTICE PREP' : 'GAME PREP');
+      }
+      return next;
+    });
+    if (!isFinal) setCurrentStep(s => s + 1);
     else navigation?.goBack();
   };
 
@@ -222,7 +304,7 @@ export default function PrepBookScreen({ navigation, route }: any) {
           <Text style={styles.stepCardDesc}>{step.desc}</Text>
         </View>
 
-        {/* Step 1 — Attendance */}
+        {/* Step 1 — Attendance (shared) */}
         {currentStep === 0 && (
           <AttendanceStep
             roster={roster}
@@ -234,8 +316,8 @@ export default function PrepBookScreen({ navigation, route }: any) {
           />
         )}
 
-        {/* Step 2 — Lineup */}
-        {currentStep === 1 && (
+        {/* Game: Step 2 — Lineup */}
+        {!isPractice && currentStep === 1 && (
           <LineupStep
             roster={roster}
             lineupRoles={lineupRoles}
@@ -245,8 +327,8 @@ export default function PrepBookScreen({ navigation, route }: any) {
           />
         )}
 
-        {/* Step 3 — Scouting */}
-        {currentStep === 2 && (
+        {/* Game: Step 3 — Scouting */}
+        {!isPractice && currentStep === 2 && (
           <ScoutingStep
             scoutItems={scoutItems}
             setScoutItems={setScoutItems}
@@ -257,8 +339,8 @@ export default function PrepBookScreen({ navigation, route }: any) {
           />
         )}
 
-        {/* Step 4 — Game Focus */}
-        {currentStep === 3 && (
+        {/* Game: Step 4 — Game Focus */}
+        {!isPractice && currentStep === 3 && (
           <GameFocusStep
             items={gameFocusItems}
             setItems={setGameFocusItems}
@@ -269,18 +351,58 @@ export default function PrepBookScreen({ navigation, route }: any) {
           />
         )}
 
-        {/* Step 5 — Stub */}
-        {currentStep === 4 && (
+        {/* Game: Step 5 — Pre-Game Stub */}
+        {!isPractice && currentStep === 4 && (
           <StepStub step={STEPS[currentStep]} color={accentColor} />
         )}
 
-        {/* Step 6 — Final */}
-        {currentStep === 5 && (
+        {/* Game: Step 6 — Final */}
+        {!isPractice && currentStep === 5 && (
           <FinalStep
             roster={roster}
             completedSteps={completedSteps}
             totalSteps={STEPS.length}
             accentColor={accentColor}
+            steps={STEPS}
+          />
+        )}
+
+        {/* Practice: Step 2 — Drill Plan */}
+        {isPractice && currentStep === 1 && (
+          <DrillPlanStep
+            drills={drills}
+            setDrills={setDrills}
+          />
+        )}
+
+        {/* Practice: Step 3 — Training Focus */}
+        {isPractice && currentStep === 2 && (
+          <TrainingFocusStep
+            items={trainingFocus}
+            setItems={setTrainingFocus}
+            notes={focusNotes}
+            setNotes={setFocusNotes}
+            confirmed={practFocusConfirmed}
+            setConfirmed={setPractFocusConfirmed}
+          />
+        )}
+
+        {/* Practice: Step 4 — Equipment */}
+        {isPractice && currentStep === 3 && (
+          <EquipmentStep
+            equipment={equipment}
+            setEquipment={setEquipment}
+          />
+        )}
+
+        {/* Practice: Step 5 — Final */}
+        {isPractice && currentStep === 4 && (
+          <FinalStep
+            roster={roster}
+            completedSteps={completedSteps}
+            totalSteps={STEPS.length}
+            accentColor={accentColor}
+            steps={STEPS}
           />
         )}
 
@@ -942,7 +1064,7 @@ function GameFocusStep({
 
 // ─── Step Stub (placeholder for step 5: Pre-Game) ────────────────────────────
 
-function StepStub({ step, color }: { step: typeof STEPS[0]; color: string }) {
+function StepStub({ step, color }: { step: typeof GAME_STEPS[0]; color: string }) {
   return (
     <View style={styles.stepContent}>
       <View style={[styles.stubCard, { borderColor: `${color}33` }]}>
@@ -958,12 +1080,13 @@ function StepStub({ step, color }: { step: typeof STEPS[0]; color: string }) {
 // ─── Step 6: Final Check ─────────────────────────────────────────────────────
 
 function FinalStep({
-  roster, completedSteps, totalSteps, accentColor,
+  roster, completedSteps, totalSteps, accentColor, steps,
 }: {
   roster: Player[];
   completedSteps: number[];
   totalSteps: number;
   accentColor: string;
+  steps: typeof GAME_STEPS;
 }) {
   const available = roster.filter(p => p.status === 'present').length;
   const pct = Math.round((completedSteps.length / totalSteps) * 100);
@@ -976,7 +1099,7 @@ function FinalStep({
           <View style={[styles.finalBarFill, { width: `${pct}%` as any, backgroundColor: accentColor }]} />
         </View>
       </View>
-      {STEPS.map((s, i) => (
+      {steps.map((s, i) => (
         <View key={s.id} style={styles.finalCheckRow}>
           <View style={[styles.finalDot, completedSteps.includes(i) ? { backgroundColor: Colors.green } : { backgroundColor: Colors.border }]} />
           <Text style={[styles.finalStepName, completedSteps.includes(i) && { color: Colors.green }]}>{s.title}</Text>
@@ -987,6 +1110,477 @@ function FinalStep({
       ))}
       <View style={styles.readyBanner}>
         <Text style={[styles.readyText, { color: accentColor }]}>{available} PLAYERS READY · TAP CONFIRM</Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Practice Step: Drill Plan ───────────────────────────────────────────────
+
+const DRILL_DURATIONS = [5, 10, 15, 20, 30];
+const suggestDrillFn = httpsCallable(functions, 'suggestDrill');
+
+const CAT_COLORS: Record<string, string> = {
+  offense: Colors.green,
+  defense: Colors.red,
+  'set-piece': Colors.amber,
+  special: Colors.purple,
+};
+
+function DrillPlanStep({
+  drills, setDrills,
+}: {
+  drills: DrillItem[];
+  setDrills: React.Dispatch<React.SetStateAction<DrillItem[]>>;
+}) {
+  const { coachSport } = useCoach();
+  const { teamCode } = useAuth();
+  const [addingDrill, setAddingDrill] = useState(false);
+  const [newDrillName, setNewDrillName] = useState('');
+  const [aiInput, setAiInput] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [showPlayPicker, setShowPlayPicker] = useState(false);
+  const [savedDrills, setSavedDrills] = useState<SavedDrill[]>([]);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!teamCode) return;
+    getDocs(collection(db, 'teams', teamCode, 'savedDrills'))
+      .then(snap => setSavedDrills(snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<SavedDrill, 'id'>) }))))
+      .catch(() => {});
+  }, [teamCode]);
+
+  const totalMinutes = drills.reduce((sum, d) => sum + d.duration, 0);
+  const sportPlays = globalPlays.filter((p: Play) => p.sport === coachSport);
+
+  const handleSaveDrill = async (drill: DrillItem) => {
+    if (!teamCode || savedIds.has(drill.id)) return;
+    try {
+      const ref = await addDoc(collection(db, 'teams', teamCode, 'savedDrills'), {
+        name: drill.name, duration: drill.duration, notes: drill.notes, createdAt: serverTimestamp(),
+      });
+      setSavedDrills(prev => [...prev, { id: ref.id, name: drill.name, duration: drill.duration, notes: drill.notes }]);
+      setSavedIds(prev => new Set([...prev, drill.id]));
+    } catch { /* silently fail */ }
+  };
+
+  const addDrill = () => {
+    const name = newDrillName.trim();
+    if (name) {
+      setDrills(prev => [...prev, { id: `d${Date.now()}`, name, duration: 10, notes: '' }]);
+    }
+    setNewDrillName('');
+    setAddingDrill(false);
+  };
+
+  const removeDrill = (id: string) =>
+    setDrills(prev => prev.filter(d => d.id !== id));
+
+  const setDuration = (id: string, duration: number) =>
+    setDrills(prev => prev.map(d => d.id === id ? { ...d, duration } : d));
+
+  const setNotes = (id: string, notes: string) =>
+    setDrills(prev => prev.map(d => d.id === id ? { ...d, notes } : d));
+
+  const handleAiSuggest = async () => {
+    if (!aiInput.trim()) return;
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const result = await suggestDrillFn({
+        sport: coachSport,
+        description: aiInput.trim(),
+        existingDrills: drills.map(d => d.name),
+      });
+      const { name, duration, notes } = result.data as { name: string; duration: number; notes: string };
+      setDrills(prev => [...prev, { id: `d${Date.now()}`, name, duration, notes }]);
+      setAiInput('');
+    } catch (err: any) {
+      const msg = err?.message || err?.details || JSON.stringify(err);
+      setAiError(msg || 'Could not reach AI — check connection.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const addPlayAsDrill = (play: Play) => {
+    setDrills(prev => [...prev, { id: `d${Date.now()}`, name: play.name, duration: 10, notes: '' }]);
+    setShowPlayPicker(false);
+  };
+
+  return (
+    <View style={styles.stepContent}>
+      <View style={styles.drillHeader}>
+        <Text style={styles.drillHeaderLabel}>SESSION TOTAL</Text>
+        <View style={styles.drillTimePill}>
+          <Text style={styles.drillTimeText}>{totalMinutes} MIN</Text>
+        </View>
+      </View>
+
+      {drills.map((drill, idx) => (
+        <View key={drill.id} style={styles.drillBlock}>
+          <View style={styles.drillBlockHeader}>
+            <Text style={styles.drillIndex}>{idx + 1}</Text>
+            <Text style={styles.drillName}>{drill.name}</Text>
+            <TouchableOpacity onPress={() => handleSaveDrill(drill)} style={styles.drillSaveBtn}>
+              <MaterialCommunityIcons
+                name={savedIds.has(drill.id) ? 'bookmark' : 'bookmark-outline'}
+                size={16}
+                color={savedIds.has(drill.id) ? Colors.cyan : Colors.dim}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => removeDrill(drill.id)} style={styles.drillRemoveBtn}>
+              <Text style={styles.drillRemoveText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.drillDurations}>
+            {DRILL_DURATIONS.map(min => (
+              <TouchableOpacity
+                key={min}
+                style={[styles.drillDurPill, drill.duration === min && styles.drillDurPillActive]}
+                onPress={() => setDuration(drill.id, min)}
+              >
+                <Text style={[styles.drillDurText, drill.duration === min && styles.drillDurTextActive]}>
+                  {min}m
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            style={styles.drillNotes}
+            value={drill.notes}
+            onChangeText={t => setNotes(drill.id, t)}
+            placeholder="Notes (optional)..."
+            placeholderTextColor={Colors.muted}
+            multiline
+          />
+        </View>
+      ))}
+
+      {/* AI Suggest row */}
+      <View style={styles.drillAiRow}>
+        <TextInput
+          style={styles.drillAiInput}
+          value={aiInput}
+          onChangeText={t => { setAiInput(t); setAiError(''); }}
+          placeholder="Describe a drill..."
+          placeholderTextColor={Colors.muted}
+          returnKeyType="done"
+          onSubmitEditing={handleAiSuggest}
+          editable={!aiLoading}
+        />
+        <TouchableOpacity
+          style={[styles.drillAiBtn, aiLoading && styles.drillAiBtnDisabled]}
+          onPress={handleAiSuggest}
+          disabled={aiLoading}
+        >
+          {aiLoading
+            ? <ActivityIndicator size="small" color={Colors.cyan} />
+            : <MaterialCommunityIcons name="lightning-bolt" size={18} color={Colors.cyan} />
+          }
+        </TouchableOpacity>
+      </View>
+      {!!aiError && <Text style={styles.drillAiError}>{aiError}</Text>}
+
+      {/* From Playbook button */}
+      <TouchableOpacity style={styles.drillPlaybookBtn} onPress={() => setShowPlayPicker(true)}>
+        <MaterialCommunityIcons name="book-open-outline" size={14} color={Colors.cyan} />
+        <Text style={styles.drillPlaybookBtnText}>FROM PLAYBOOK</Text>
+      </TouchableOpacity>
+
+      {addingDrill ? (
+        <View style={styles.drillAddInputRow}>
+          <TextInput
+            style={styles.drillAddInput}
+            value={newDrillName}
+            onChangeText={setNewDrillName}
+            placeholder="Drill name..."
+            placeholderTextColor={Colors.muted}
+            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={addDrill}
+            onBlur={addDrill}
+          />
+        </View>
+      ) : (
+        <TouchableOpacity style={styles.drillAddBtn} onPress={() => setAddingDrill(true)}>
+          <Text style={styles.drillAddBtnText}>+ ADD DRILL</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Play Picker Modal */}
+      <Modal visible={showPlayPicker} transparent animationType="slide">
+        <TouchableWithoutFeedback onPress={() => setShowPlayPicker(false)}>
+          <View style={styles.drillPickerOverlay} />
+        </TouchableWithoutFeedback>
+        <View style={styles.drillPickerSheet}>
+          <View style={styles.drillPickerHandle} />
+          <Text style={styles.drillPickerTitle}>DRILL LIBRARY</Text>
+          <ScrollView>
+            {/* ── Saved Drills ── */}
+            <Text style={styles.drillPickerSection}>SAVED DRILLS</Text>
+            {savedDrills.length === 0 ? (
+              <Text style={styles.drillPickerEmpty}>No saved drills yet. Tap 🔖 on any drill to save it.</Text>
+            ) : (
+              savedDrills.map(sd => (
+                <TouchableOpacity
+                  key={sd.id}
+                  style={styles.drillPickerRow}
+                  onPress={() => {
+                    setDrills(prev => [...prev, { id: `d${Date.now()}`, name: sd.name, duration: sd.duration, notes: sd.notes }]);
+                    setShowPlayPicker(false);
+                  }}
+                >
+                  <Text style={styles.drillPickerPlayName}>{sd.name}</Text>
+                  <View style={styles.drillPickerDurBadge}>
+                    <Text style={styles.drillPickerDurText}>{sd.duration}m</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+
+            {/* ── Plays ── */}
+            <Text style={[styles.drillPickerSection, { marginTop: 20 }]}>PLAYS</Text>
+            {sportPlays.length === 0 ? (
+              <Text style={styles.drillPickerEmpty}>No plays in your playbook for {coachSport} yet.</Text>
+            ) : (
+              sportPlays.map((play: Play) => (
+                <TouchableOpacity
+                  key={play.id}
+                  style={styles.drillPickerRow}
+                  onPress={() => addPlayAsDrill(play)}
+                >
+                  <Text style={styles.drillPickerPlayName}>{play.name}</Text>
+                  <View style={[styles.drillPickerCatBadge, { borderColor: CAT_COLORS[play.category] ?? Colors.dim }]}>
+                    <Text style={[styles.drillPickerCatText, { color: CAT_COLORS[play.category] ?? Colors.dim }]}>
+                      {play.category.toUpperCase()}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+// ─── Practice Step: Training Focus ───────────────────────────────────────────
+
+function TrainingFocusStep({
+  items, setItems, notes, setNotes, confirmed, setConfirmed,
+}: {
+  items: FocusItem[];
+  setItems: React.Dispatch<React.SetStateAction<FocusItem[]>>;
+  notes: string;
+  setNotes: React.Dispatch<React.SetStateAction<string>>;
+  confirmed: boolean;
+  setConfirmed: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  const [editingId, setEditingId]   = useState<string | null>(null);
+  const [addingItem, setAddingItem] = useState(false);
+  const [newItemText, setNewItemText] = useState('');
+
+  const addItem = () => {
+    const text = newItemText.trim();
+    if (text) {
+      setItems(prev => [...prev, { id: `tf${Date.now()}`, text, detail: '' }]);
+    }
+    setNewItemText('');
+    setAddingItem(false);
+  };
+
+  const updateDetail = (id: string, detail: string) =>
+    setItems(prev => prev.map(i => i.id === id ? { ...i, detail } : i));
+
+  return (
+    <View style={styles.stepContent}>
+      <View style={styles.scoutCard}>
+        {items.map((item, idx) => (
+          <View key={item.id}>
+            {idx > 0 && <View style={styles.scoutDivider} />}
+            <View style={styles.scoutRow}>
+              <View style={styles.focusNumBadge}>
+                <Text style={styles.focusNumText}>{idx + 1}</Text>
+              </View>
+              <View style={styles.scoutItemContent}>
+                <Text style={styles.scoutItemTitle}>{item.text}</Text>
+                {editingId === item.id ? (
+                  <TextInput
+                    style={styles.scoutNoteInput}
+                    value={item.detail}
+                    onChangeText={t => updateDetail(item.id, t)}
+                    onBlur={() => setEditingId(null)}
+                    onSubmitEditing={() => setEditingId(null)}
+                    autoFocus
+                    placeholder="Add detail..."
+                    placeholderTextColor={Colors.muted}
+                    returnKeyType="done"
+                  />
+                ) : item.detail ? (
+                  <Text style={styles.scoutItemNote}>{item.detail}</Text>
+                ) : null}
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.scoutActionBtn,
+                  editingId === item.id && { borderColor: `${Colors.cyan}88`, backgroundColor: 'rgba(0,212,255,0.08)' },
+                ]}
+                onPress={() => setEditingId(prev => prev === item.id ? null : item.id)}
+              >
+                <Text style={styles.scoutActionIcon}>✏️</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
+        <View style={styles.scoutDivider} />
+        {addingItem ? (
+          <View style={styles.addItemInputRow}>
+            <TextInput
+              style={styles.addItemInput}
+              value={newItemText}
+              onChangeText={setNewItemText}
+              placeholder="New focus area..."
+              placeholderTextColor={Colors.muted}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={addItem}
+              onBlur={addItem}
+            />
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.addItemBtn} onPress={() => setAddingItem(true)}>
+            <Text style={styles.addItemText}>+ Add focus area</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <Text style={styles.coachNotesLabel}>SESSION NOTES</Text>
+      <View style={styles.coachNotesCard}>
+        <TextInput
+          style={styles.coachNotesInput}
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          numberOfLines={4}
+          placeholder="Any additional tactical notes or session goals..."
+          placeholderTextColor={Colors.muted}
+          textAlignVertical="top"
+        />
+      </View>
+
+      <TouchableOpacity
+        style={[styles.focusConfirmCard, confirmed && styles.focusConfirmCardDone]}
+        onPress={() => setConfirmed(v => !v)}
+        activeOpacity={0.8}
+      >
+        <View style={[styles.focusConfirmCheck, confirmed && styles.focusConfirmCheckDone]}>
+          {confirmed && <Text style={styles.focusConfirmMark}>✓</Text>}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.focusConfirmTitle, confirmed && { color: Colors.green }]}>
+            Focus areas confirmed
+          </Text>
+          <Text style={styles.focusConfirmSub}>
+            {confirmed ? '✓ Marked complete – tap to undo' : 'Tap to confirm training focus'}
+          </Text>
+        </View>
+        {confirmed && (
+          <View style={styles.focusDoneBtn}>
+            <Text style={styles.focusDoneBtnText}>DONE</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ─── Practice Step: Equipment Check ──────────────────────────────────────────
+
+function EquipmentStep({
+  equipment, setEquipment,
+}: {
+  equipment: EquipmentItem[];
+  setEquipment: React.Dispatch<React.SetStateAction<EquipmentItem[]>>;
+}) {
+  const [addingItem, setAddingItem] = useState(false);
+  const [newLabel, setNewLabel]     = useState('');
+  const checkedCount = equipment.filter(e => e.checked).length;
+
+  const toggle = (id: string) =>
+    setEquipment(prev => prev.map(e => e.id === id ? { ...e, checked: !e.checked } : e));
+
+  const remove = (id: string) =>
+    setEquipment(prev => prev.filter(e => e.id !== id));
+
+  const addItem = () => {
+    const label = newLabel.trim();
+    if (label) {
+      setEquipment(prev => [...prev, { id: `eq${Date.now()}`, label, checked: false }]);
+    }
+    setNewLabel('');
+    setAddingItem(false);
+  };
+
+  return (
+    <View style={styles.stepContent}>
+      <View style={styles.equipHeader}>
+        <Text style={styles.equipHeaderLabel}>GEAR CHECKLIST</Text>
+        <View style={[
+          styles.equipCountPill,
+          checkedCount === equipment.length && { borderColor: `${Colors.green}55`, backgroundColor: 'rgba(46,204,113,0.08)' },
+        ]}>
+          <Text style={[styles.equipCountText, checkedCount === equipment.length && { color: Colors.green }]}>
+            {checkedCount}/{equipment.length} PACKED
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.scoutCard}>
+        {equipment.map((item, idx) => (
+          <View key={item.id}>
+            {idx > 0 && <View style={styles.scoutDivider} />}
+            <View style={styles.equipRow}>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                onPress={() => toggle(item.id)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.scoutCheck, item.checked && styles.scoutCheckDone]}>
+                  {item.checked && <Text style={styles.scoutCheckMark}>✓</Text>}
+                </View>
+                <Text style={[styles.equipLabel, item.checked && { textDecorationLine: 'line-through', opacity: 0.45 }]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => remove(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <MaterialCommunityIcons name="trash-can-outline" size={16} color={Colors.muted} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
+        <View style={styles.scoutDivider} />
+        {addingItem ? (
+          <View style={styles.addItemInputRow}>
+            <TextInput
+              style={styles.addItemInput}
+              value={newLabel}
+              onChangeText={setNewLabel}
+              placeholder="New item..."
+              placeholderTextColor={Colors.muted}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={addItem}
+              onBlur={addItem}
+            />
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.addItemBtn} onPress={() => setAddingItem(true)}>
+            <Text style={styles.addItemText}>+ Add item</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -1300,6 +1894,123 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(61,143,255,0.05)', alignItems: 'center',
   },
   readyText: { fontFamily: Fonts.orbitron, fontSize: 11, letterSpacing: 1 },
+
+  // ── Drill Plan ────────────────────────────────────────────────────────────
+  drillHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12,
+  },
+  drillHeaderLabel: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, letterSpacing: 2 },
+  drillTimePill: {
+    paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: `${Colors.green}55`, backgroundColor: 'rgba(46,204,113,0.08)',
+  },
+  drillTimeText: { fontFamily: Fonts.orbitron, fontSize: 10, color: Colors.green, letterSpacing: 1 },
+  drillBlock: {
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 10,
+  },
+  drillBlockHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  drillIndex: { fontFamily: Fonts.orbitron, fontSize: 12, color: Colors.dim, width: 18 },
+  drillName: { flex: 1, fontFamily: Fonts.rajdhani, fontSize: 15, color: Colors.text, fontWeight: '700' },
+  drillRemoveBtn: { padding: 4 },
+  drillRemoveText: { fontFamily: Fonts.mono, fontSize: 11, color: Colors.muted },
+  drillDurations: { flexDirection: 'row', gap: 6, marginBottom: 10 },
+  drillDurPill: {
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  drillDurPillActive: { backgroundColor: Colors.green, borderColor: Colors.green },
+  drillDurText: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, letterSpacing: 0.5 },
+  drillDurTextActive: { color: '#000' },
+  drillNotes: {
+    fontFamily: Fonts.rajdhani, fontSize: 12, color: Colors.text,
+    borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 8, minHeight: 32,
+  },
+  drillAddInputRow: {
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: Radius.lg, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10,
+  },
+  drillAddInput: { fontFamily: Fonts.rajdhani, fontSize: 14, color: Colors.text },
+  drillAddBtn: {
+    paddingVertical: 16, borderRadius: Radius.lg, borderWidth: 1,
+    borderColor: `${Colors.green}44`, backgroundColor: 'rgba(46,204,113,0.04)',
+    alignItems: 'center', marginBottom: 14,
+  },
+  drillAddBtnText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.green, letterSpacing: 2 },
+
+  // ── AI Suggest ─────────────────────────────────────────────────────────────
+  drillAiRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8,
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: `${Colors.cyan}44`,
+    borderRadius: Radius.lg, paddingHorizontal: 14, paddingVertical: 8,
+  },
+  drillAiInput: { flex: 1, fontFamily: Fonts.rajdhani, fontSize: 14, color: Colors.text },
+  drillAiBtn: {
+    width: 32, height: 32, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: `${Colors.cyan}22`,
+  },
+  drillAiBtnDisabled: { opacity: 0.5 },
+  drillAiError: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.red, letterSpacing: 1, marginBottom: 8 },
+
+  // ── From Playbook ──────────────────────────────────────────────────────────
+  drillPlaybookBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12,
+    borderRadius: Radius.lg, borderWidth: 1, borderColor: `${Colors.cyan}33`,
+    backgroundColor: `${Colors.cyan}08`, justifyContent: 'center', marginBottom: 10,
+  },
+  drillPlaybookBtnText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.cyan, letterSpacing: 2 },
+
+  // ── Play Picker Modal ──────────────────────────────────────────────────────
+  drillPickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  drillPickerSheet: {
+    backgroundColor: Colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: Spacing.lg, paddingBottom: 32, maxHeight: '60%',
+  },
+  drillPickerHandle: {
+    width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.border2,
+    alignSelf: 'center', marginTop: 10, marginBottom: 14,
+  },
+  drillPickerTitle: {
+    fontFamily: Fonts.orbitron, fontSize: 11, color: Colors.dim, letterSpacing: 2, marginBottom: 12,
+  },
+  drillPickerEmpty: { fontFamily: Fonts.rajdhani, fontSize: 14, color: Colors.muted, textAlign: 'center', paddingVertical: 20 },
+  drillPickerRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  drillPickerPlayName: { flex: 1, fontFamily: Fonts.rajdhani, fontSize: 15, color: Colors.text, fontWeight: '700' },
+  drillPickerCatBadge: {
+    paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.sm, borderWidth: 1,
+  },
+  drillPickerCatText: { fontFamily: Fonts.mono, fontSize: 8, letterSpacing: 1 },
+  drillSaveBtn: { padding: 4 },
+  drillPickerSection: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, letterSpacing: 2, marginBottom: 6 },
+  drillPickerDurBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: Radius.sm, backgroundColor: Colors.border },
+  drillPickerDurText: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim },
+
+  // ── Training Focus ─────────────────────────────────────────────────────────
+  focusNumBadge: {
+    width: 24, height: 24, borderRadius: 12, borderWidth: 1,
+    borderColor: `${Colors.cyan}55`, backgroundColor: 'rgba(0,212,255,0.08)',
+    alignItems: 'center', justifyContent: 'center', marginTop: 1,
+  },
+  focusNumText: { fontFamily: Fonts.orbitron, fontSize: 9, color: Colors.cyan },
+
+  // ── Equipment ──────────────────────────────────────────────────────────────
+  equipHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12,
+  },
+  equipHeaderLabel: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, letterSpacing: 2 },
+  equipCountPill: {
+    paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  equipCountText: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.muted, letterSpacing: 0.5 },
+  equipRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 14, gap: 12,
+  },
+  equipLabel: { fontFamily: Fonts.rajdhani, fontSize: 15, color: Colors.text, fontWeight: '700', marginLeft: 10 },
 
   // Bottom bar
   bottomBar: {

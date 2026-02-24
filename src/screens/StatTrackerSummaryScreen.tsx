@@ -11,7 +11,7 @@ import { useCoach } from '../context/CoachContext';
 export default function StatTrackerSummaryScreen() {
   const navigation = useNavigation<any>();
   const route      = useRoute<any>();
-  const { addXp }  = useCoach();
+  const { recordGameComplete } = useCoach();
 
   const {
     config,
@@ -155,7 +155,7 @@ export default function StatTrackerSummaryScreen() {
           style={styles.saveBtn}
           onPress={() => {
             const statCount = Object.values(teamStats).reduce((s, v) => s + v, 0);
-            addXp(50 + statCount);
+            recordGameComplete(config.sport, 50 + statCount);
             navigation.navigate('Tabs');
           }}
         >

@@ -23,6 +23,7 @@ import Navigation from './src/navigation';
 import { CoachProvider } from './src/context/CoachContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { Colors } from './src/theme';
+import XpToastWidget from './src/components/XpToastWidget';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -50,7 +51,10 @@ export default function App() {
         <AuthProvider>
           <CoachProvider>
             <StatusBar style="light" backgroundColor={Colors.bg} />
-            <Navigation />
+            <View style={{ flex: 1 }}>
+              <Navigation />
+              <XpToastWidget />
+            </View>
           </CoachProvider>
         </AuthProvider>
       </SafeAreaProvider>

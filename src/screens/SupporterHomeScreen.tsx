@@ -16,6 +16,8 @@ import { useAuth } from '../context/AuthContext';
 import { useCoach } from '../context/CoachContext';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
 import MotiHero from '../components/MotiHero';
+import BadgeShelf from '../components/BadgeShelf';
+import BadgeUnlockModal from '../components/BadgeUnlockModal';
 
 // ─── Types & Constants ────────────────────────────────────────────────────────
 
@@ -108,7 +110,7 @@ function isToday(date: Date): boolean {
 
 export default function SupporterHomeScreen() {
   const { user, role } = useAuth();
-  const { teamXp, motiStage } = useCoach();
+  const { teamXp, motiStage, earnedBadges, pendingBadge, clearPendingBadge } = useCoach();
 
   const [selectedEvent, setSelectedEvent] = useState<TeamEvent | null>(null);
   const [sheetVisible,  setSheetVisible]  = useState(false);
@@ -150,9 +152,6 @@ export default function SupporterHomeScreen() {
           </Text>
         </View>
         <View style={styles.headerRight}>
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>LVL {motiStage + 1}</Text>
-          </View>
           <View style={[styles.pill, styles.pillAmber]}>
             <Text style={[styles.pillText, { color: Colors.amber }]}>{teamXp} XP</Text>
           </View>
@@ -256,25 +255,31 @@ export default function SupporterHomeScreen() {
 
         <View style={styles.sectionDivider} />
 
-        {/* Team MOTI status */}
+        {/* Team Achievements */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>TEAM MOTI</Text>
+          <Text style={styles.sectionLabel}>TEAM ACHIEVEMENTS</Text>
           <View style={styles.motiCard}>
             <View style={styles.motiCardLeft}>
-              <Text style={styles.motiStageLabel}>STAGE {motiStage + 1}</Text>
-              <Text style={styles.motiStageName}>
-                {['BOOT', 'CORE', 'REACH', 'STRIDE', 'PRIME'][motiStage]}
-              </Text>
-              <Text style={styles.motiXp}>{teamXp} XP earned together</Text>
+              <Text style={styles.motiXp}>{teamXp} XP EARNED TOGETHER</Text>
             </View>
             <View style={styles.motiCardRight}>
-              <Text style={styles.motiEmoji}>⚡</Text>
+              <Text style={styles.motiEmoji}>🏆</Text>
             </View>
           </View>
         </View>
 
+        {/* Badge Shelf */}
+        <BadgeShelf earnedBadges={earnedBadges} />
+
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      {/* Badge Unlock Modal */}
+      <BadgeUnlockModal
+        badge={pendingBadge}
+        motiStage={motiStage}
+        onDismiss={clearPendingBadge}
+      />
 
       {/* Event sheet */}
       <EventSheet
