@@ -20,6 +20,18 @@ const MOTI_IMAGES = [
   require('../../assets/MOTIS/5-MOTI.png'),
 ];
 
+// Stage-specific intro videos — swap each entry for the real asset when ready
+// Expected files: assets/MOTIS/0-IGNITE.mp4 … 4-PRIME.mp4
+const MOTI_VIDEOS = [
+  require('../../assets/MOTI-Small-File.mp4'), // 0 · IGNITE
+  require('../../assets/MOTI-Small-File.mp4'), // 1 · CORE
+  require('../../assets/MOTI-Small-File.mp4'), // 2 · REACH
+  require('../../assets/MOTI-Small-File.mp4'), // 3 · STRIDE
+  require('../../assets/MOTI-Small-File.mp4'), // 4 · PRIME
+];
+
+const STAGE_NAMES = ['IGNITE', 'CORE', 'REACH', 'STRIDE', 'PRIME'];
+
 interface MotiHeroProps {
   motiStage: number;
 }
@@ -33,7 +45,7 @@ export default function MotiHero({ motiStage }: MotiHeroProps) {
   const videoOpacity = useRef(new Animated.Value(1)).current;
 
   const player = useVideoPlayer(
-    require('../../assets/MOTI-Small-File.mp4'),
+    MOTI_VIDEOS[motiStage] ?? MOTI_VIDEOS[0],
     p => {
       p.loop   = false;
       p.muted  = true;
@@ -75,7 +87,7 @@ export default function MotiHero({ motiStage }: MotiHeroProps) {
             nativeControls={false}
           />
         </Animated.View>
-        <Text style={styles.label}>PROTO · LV{motiStage + 1}</Text>
+        <Text style={styles.label}>{STAGE_NAMES[motiStage] ?? 'IGNITE'}</Text>
       </View>
     </TouchableOpacity>
   );

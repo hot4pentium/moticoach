@@ -87,7 +87,7 @@ Team XP pool drives the shared MOTI advancement.
 | Per stat recorded in that game | +1 each |
 | Game Day Live taps (future) | every 3 taps = +1 |
 
-MOTI stages: BOOT(0) → CORE(100) → REACH(250) → STRIDE(500) → PRIME(1000)
+MOTI stages: IGNITE(0) → CORE(100) → REACH(250) → STRIDE(500) → PRIME(1000)
 - `motiStage` in CoachContext is the source of truth for all screens
 - Dashboard + SupporterHome LVL/XP badges read from context
 - MotiScreen XP bar and stage dots read from context (unlocked computed live from teamXp)
@@ -188,12 +188,15 @@ Home tab for supporter/athlete roles:
 - `canEdit` is always false for supporter/athlete — ProfileSheet shows read-only view
 
 ## MotiHero Component (`src/components/MotiHero.tsx`)
-Shared widget used in DashboardScreen and SupporterHomeScreen:
+Shared widget used in DashboardScreen, SupporterHomeScreen, and MotiScreen:
 - Shows stage-correct still image (`MOTIS/{n}-MOTI.png`) always underneath
-- Plays `MOTI-Small-File.mp4` on mount (loop=false, muted)
+- Plays stage-correct video from `MOTI_VIDEOS[motiStage]` on mount (loop=false, muted)
 - Video fades out (700ms) via `Animated` when `playToEnd` fires
 - Tap replays the animation
+- Label shows stage name via `STAGE_NAMES[motiStage]` — IGNITE / CORE / REACH / STRIDE / PRIME
 - Props: `{ motiStage: number }`
+- Stage video assets: `assets/MOTIS/0-IGNITE.mp4` … `4-PRIME.mp4` (currently placeholder until renders delivered)
+- `BadgeUnlockModal.tsx` uses the same `MOTI_VIDEOS` array for the unlock animation
 
 ## Chat System
 Team-wide group chat + direct messages for all roles. Fully implemented.

@@ -28,6 +28,8 @@ import { useCoach } from '../context/CoachContext';
 import { useAuth } from '../context/AuthContext';
 import { Sport } from './PlayEditorScreen';
 
+const STAGE_NAMES = ['IGNITE', 'CORE', 'REACH', 'STRIDE', 'PRIME'];
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type MemberRole = 'athlete' | 'staff' | 'supporter';
@@ -152,7 +154,7 @@ export default function RosterScreen() {
             style={styles.motiImg}
             resizeMode="contain"
           />
-          <Text style={styles.motiLabel}>PROTO · LV{motiStage + 1}</Text>
+          <Text style={styles.motiLabel}>{STAGE_NAMES[motiStage] ?? 'IGNITE'}</Text>
         </View>
       </View>
 
