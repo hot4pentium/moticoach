@@ -6,6 +6,8 @@ React Native / Expo PWA for sports coaching. TypeScript throughout.
 ```
 npm start        # Expo dev server
 npm run web      # PWA in browser
+npm run build    # Export web build → serves locally + opens browser
+npm run deploy   # Export web build → push to leaguematrix.com (Firebase Hosting)
 ```
 
 ## Stack
@@ -23,7 +25,7 @@ src/
   theme/          # index.ts — Colors, Fonts, Radius, Spacing, Gradients, HeroText
   context/        # CoachContext.tsx, AuthContext.tsx
   lib/            # firebase.ts, dmUtils.ts, notifications.ts, badges.ts, demoData.ts, adminTheme.ts, demoTheme.tsx
-  components/     # OnboardingTooltip.tsx, BadgeShelf.tsx, BadgeUnlockModal.tsx, UpdateBanner.tsx, UpgradePrompt.tsx, TeamSettingsSheet.tsx, InstallPromptBanner.tsx, ProfileSheet.tsx
+  components/     # OnboardingTooltip.tsx, BadgeShelf.tsx, BadgeUnlockModal.tsx, UpdateBanner.tsx, UpgradePrompt.tsx, TeamSettingsSheet.tsx, InstallPromptBanner.tsx, ProfileSheet.tsx, LogoMark.tsx
   hooks/          # useOnboarding.ts, useSwUpdate.ts
 ```
 
@@ -196,6 +198,12 @@ The hub lives in Firestore under `teams/{teamCode}` and is **live the moment adm
 - `canEdit = role === 'coach' || role === 'staff'` — hides edit/promote/demote for supporter/athlete
 - PARENT CONTACT section only visible to coach/staff (`canEdit && !editing` shows read-only, `editing` shows editable fields)
 
+## LogoMark Component (`src/components/LogoMark.tsx`)
+- Renders the app logo using `assets/Logos/No-BG.png` (transparent background PNG, 1320×880)
+- Uses `overflow: 'hidden'` + negative `marginTop` to crop the transparent padding from the image
+- Sizes: `sm` (headers, 60px), `md` (footer, 72px), `lg` (auth screen, 90px)
+- Used in: `DashboardScreen`, `SupporterHomeScreen`, `ChatScreen` headers (sm), `AuthScreen` brand (lg), `LandingScreen` nav + footer (sm/md)
+
 ## Dashboard Layout (Coach & Supporter/Athlete)
 Both dashboards share the same visual structure — role-based access gates what is shown.
 
@@ -355,17 +363,18 @@ All accept `navigate?: (s: AdminSection, param?: string) => void`:
 ## Firebase Hosting
 - Live URL: https://moticoach-907ff.web.app
 - Custom domain: leaguematrix.com (GoDaddy → Firebase Quick Setup, A record 199.36.158.100)
-- Deploy: `npx expo export --platform web && firebase deploy --only hosting`
+- Deploy: `npm run deploy` (or manually: `npx expo export --platform web && firebase deploy --only hosting`)
 - **Font fix**: `firebase.json` hosting ignore must use `node_modules/**` (NOT `**/node_modules/**`)
 
 ## Firebase Cloud Functions
 - `functions/src/index.ts` — Node 22, TypeScript; `firebase-admin` initialized at top of file
+- `firebase-functions` version: `^7.0.6` (upgraded from v5 to fix 400 validation errors on deploy)
 - `suggestDrill` — HTTPS callable, uses `defineSecret('ANTHROPIC_KEY')`
 - `onTeamChatMessage` — Firestore trigger on `teamChats/{teamCode}/messages`; sends push (web-push) + email (mail collection) to all team members except sender; checks `notificationPrefs` per user
 - `onDmMessage` — Firestore trigger on `dmConversations/{convId}/messages`; sends push + email to the other participant
 - Email delivery: Firebase **Trigger Email** extension (install from Firebase Console → Extensions) reads `mail/{id}` collection and delivers
 - Push delivery: `web-push` npm package in functions; VAPID keys via Secret Manager
-- Deploy: `cd functions && npm run build && cd .. && firebase deploy --only functions`
+- Deploy functions: `cd functions && npm run build && cd .. && firebase deploy --only functions`
 - Set secrets: `firebase functions:secrets:set ANTHROPIC_KEY` / `firebase functions:secrets:set VAPID_PRIVATE_KEY`
 
 ## Conventions

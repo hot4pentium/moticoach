@@ -6,7 +6,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build": "expo export --platform web && npx serve dist --single -l 3000 & sleep 2 && open http://localhost:3000",
+    "deploy": "node scripts/stamp-sw.js && expo export --platform web && firebase deploy --only hosting"
   },
   "dependencies": {
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",

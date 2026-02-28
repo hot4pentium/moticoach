@@ -1,4 +1,4 @@
-// LeagueMatrix — Web Push Service Worker
+// LeagueMatrix — Web Push Service Worker | build: 2026-02-28T20:14:32.990Z
 // Handles background push notifications and app icon badging
 
 self.addEventListener('push', event => {
@@ -29,6 +29,10 @@ self.addEventListener('push', event => {
       }
     })
   );
+});
+
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('notificationclick', event => {

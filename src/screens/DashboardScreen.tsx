@@ -17,6 +17,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Fonts, Gradients, HeroText, Radius, Spacing } from '../theme';
 import BadgeUnlockModal from '../components/BadgeUnlockModal';
+import LogoMark from '../components/LogoMark';
 import BadgeShelf from '../components/BadgeShelf';
 import { Badge } from '../lib/badges';
 import TeamSettingsSheet from '../components/TeamSettingsSheet';
@@ -223,14 +224,14 @@ export default function DashboardScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.logo}>
-          League<Text style={{ color: ds(Colors.cyan) }}>Matrix</Text>
-        </Text>
+        <View style={styles.headerInner}>
+          <LogoMark size="sm" />
 
-        <View style={styles.headerPills}>
-          <TouchableOpacity onPress={() => signOut(auth)} style={styles.exitBtn} hitSlop={8}>
-            <Text style={styles.exitBtnText}>⏻</Text>
-          </TouchableOpacity>
+          <View style={styles.headerPills}>
+            <TouchableOpacity onPress={() => signOut(auth)} style={styles.exitBtn} hitSlop={8}>
+              <Text style={styles.exitBtnText}>⏻</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -730,20 +731,19 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border2,
     backgroundColor: Colors.bg,
   },
-  logo: {
-    fontFamily: Fonts.rajdhaniBold,
-    fontSize: 18,
-    color: Colors.blue,
-    letterSpacing: 1,
+  headerInner: {
+    maxWidth: 800,
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.lg,
   },
   headerPills: { flexDirection: 'row', gap: 6 },
   pill: {

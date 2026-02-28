@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCoach } from '../context/CoachContext';
 import { Colors, Fonts, Gradients, HeroText, Radius, Spacing } from '../theme';
 import BadgeUnlockModal from '../components/BadgeUnlockModal';
+import LogoMark from '../components/LogoMark';
 import BadgeShelf from '../components/BadgeShelf';
 import ProfileSheet from '../components/ProfileSheet';
 import InstallPromptBanner from '../components/InstallPromptBanner';
@@ -179,12 +180,12 @@ export default function SupporterHomeScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.logo}>
-          League<Text style={{ color: Colors.cyan }}>Matrix</Text>
-        </Text>
-        <TouchableOpacity onPress={() => signOut(auth)} style={styles.exitBtn} hitSlop={8}>
-          <Text style={styles.exitBtnText}>⏻</Text>
-        </TouchableOpacity>
+        <View style={styles.headerInner}>
+          <LogoMark size="sm" />
+          <TouchableOpacity onPress={() => signOut(auth)} style={styles.exitBtn} hitSlop={8}>
+            <Text style={styles.exitBtnText}>⏻</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -551,16 +552,20 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
 
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border2,
     backgroundColor: Colors.bg,
   },
-  logo:        { fontFamily: Fonts.rajdhaniBold, fontSize: 18, color: Colors.blue, letterSpacing: 1 },
+  headerInner: {
+    maxWidth: 800,
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.lg,
+  },
   exitBtn:     { paddingHorizontal: 8, paddingVertical: 3, marginLeft: 2 },
   exitBtnText: { fontSize: 15, color: Colors.muted },
 

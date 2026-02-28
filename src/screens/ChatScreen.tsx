@@ -14,6 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { clearBadge } from '../lib/notifications';
+import LogoMark from '../components/LogoMark';
 import {
   collection,
   query,
@@ -96,24 +97,24 @@ export default function ChatScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.logo}>
-            League<Text style={{ color: Colors.cyan }}>Matrix</Text>
-          </Text>
-          <Text style={styles.headerSub}>TEAM CHAT</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.dmBtn}
-            onPress={() => navigation.navigate('DMList')}
-            hitSlop={8}
-          >
-            <Ionicons name="chatbubbles-outline" size={20} color={Colors.cyan} />
-            <Text style={styles.dmBtnLabel}>DMs</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => signOut(auth)} style={styles.exitBtn} hitSlop={8}>
-            <Text style={styles.exitBtnText}>⏻</Text>
-          </TouchableOpacity>
+        <View style={styles.headerInner}>
+          <View>
+            <LogoMark size="sm" />
+            <Text style={styles.headerSub}>TEAM CHAT</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.dmBtn}
+              onPress={() => navigation.navigate('DMList')}
+              hitSlop={8}
+            >
+              <Ionicons name="chatbubbles-outline" size={20} color={Colors.cyan} />
+              <Text style={styles.dmBtnLabel}>DMs</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => signOut(auth)} style={styles.exitBtn} hitSlop={8}>
+              <Text style={styles.exitBtnText}>⏻</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -209,20 +210,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
 
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border2,
     backgroundColor: 'rgba(5,10,22,0.98)',
   },
-  logo: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 15,
-    color: Colors.text,
-    letterSpacing: 3,
+  headerInner: {
+    maxWidth: 800,
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.lg,
   },
   headerSub: {
     fontFamily: Fonts.mono,

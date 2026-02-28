@@ -19,6 +19,7 @@ import {
 import { auth } from '../lib/firebase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Fonts, Gradients, Radius, Spacing } from '../theme';
+import LogoMark from '../components/LogoMark';
 
 export default function AuthScreen({ onBack }: { onBack?: () => void }) {
   const { width } = useWindowDimensions();
@@ -78,9 +79,7 @@ export default function AuthScreen({ onBack }: { onBack?: () => void }) {
           )}
           {/* Brand */}
           <View style={styles.brand}>
-            <Text style={styles.logo}>
-              League<Text style={{ color: Colors.cyan }}>Matrix</Text>
-            </Text>
+            <LogoMark size="lg" />
             <Text style={styles.tagline}>Train smarter. Win together.</Text>
           </View>
 
@@ -172,13 +171,6 @@ const styles = StyleSheet.create({
   },
 
   brand: { alignItems: 'center', marginBottom: 40 },
-  logo: {
-    fontFamily: Fonts.rajdhaniBold,
-    fontSize: 40,
-    color: '#ffffff',
-    letterSpacing: 2,
-    marginBottom: 6,
-  },
   tagline: {
     fontFamily: Fonts.rajdhani,
     fontSize: 14,

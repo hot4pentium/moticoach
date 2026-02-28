@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
+import LogoMark from '../components/LogoMark';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -317,7 +318,7 @@ export default function LandingScreen({ onSignIn, onTryDemo }: Props) {
       {/* ── Sticky nav ─────────────────────────────────────────────────── */}
       <View style={[s.nav, { position: 'sticky' as any, top: 0, zIndex: 100 }]}>
         <View style={[s.navInner, center]}>
-          <Text style={s.logo}>League<Text style={{ color: Colors.cyan }}>Matrix</Text></Text>
+          <LogoMark size="sm" />
           <TouchableOpacity style={s.navBtn} onPress={onSignIn}>
             <Text style={s.navBtnTxt}>SIGN IN</Text>
           </TouchableOpacity>
@@ -487,7 +488,7 @@ export default function LandingScreen({ onSignIn, onTryDemo }: Props) {
         {/* ── Footer ───────────────────────────────────────────────────── */}
         <View style={s.footer}>
           <View style={[center, { alignItems: 'center' }]}>
-            <Text style={s.footerLogo}>League<Text style={{ color: Colors.cyan }}>Matrix</Text></Text>
+            <LogoMark size="md" />
             <Text style={s.footerSub}>Built for coaches. Scaled for leagues.</Text>
             <TouchableOpacity onPress={onSignIn}>
               <Text style={s.footerLink}>Sign in to your account  →</Text>
@@ -508,7 +509,6 @@ const s = StyleSheet.create({
   // Nav
   nav:      { backgroundColor: 'rgba(7,11,18,0.96)', borderBottomWidth: 1, borderBottomColor: Colors.border },
   navInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
-  logo:     { fontFamily: Fonts.orbitron, fontSize: 18, color: Colors.text, letterSpacing: 2 },
   navBtn:   { borderWidth: 1, borderColor: Colors.border2, borderRadius: Radius.full, paddingHorizontal: 20, paddingVertical: 7 },
   navBtnTxt:{ fontFamily: Fonts.mono, fontSize: 11, color: Colors.cyan, letterSpacing: 1 },
 
@@ -585,7 +585,6 @@ const s = StyleSheet.create({
 
   // Footer
   footer:      { paddingVertical: 48, borderTopWidth: 1, borderTopColor: Colors.border, alignItems: 'center', gap: 8 },
-  footerLogo:  { fontFamily: Fonts.orbitron, fontSize: 20, color: Colors.text, letterSpacing: 2, textAlign: 'center' },
   footerSub:   { fontFamily: Fonts.rajdhani, fontSize: 14, color: Colors.muted, textAlign: 'center' },
   footerLink:  { fontFamily: Fonts.mono, fontSize: 11, color: Colors.cyan, letterSpacing: 0.5, marginTop: Spacing.sm },
 });
