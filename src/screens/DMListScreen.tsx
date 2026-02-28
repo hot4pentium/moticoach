@@ -88,6 +88,7 @@ export default function DMListScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%', flex: 1 }}>
       {convos.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>✉️</Text>
@@ -155,6 +156,7 @@ export default function DMListScreen() {
           }}
         />
       )}
+      </View>
     </SafeAreaView>
   );
 }

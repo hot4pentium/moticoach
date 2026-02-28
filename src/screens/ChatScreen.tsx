@@ -13,6 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { clearBadge } from '../lib/notifications';
 import {
   collection,
   query,
@@ -57,6 +58,9 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text,     setText]     = useState('');
 
+  // Clear app badge when chat is opened
+  useEffect(() => { clearBadge(); }, []);
+
   // ─── Subscribe to group chat messages ──────────────────────────────────────
   useEffect(() => {
     if (!teamCode) return;
@@ -94,7 +98,7 @@ export default function ChatScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.logo}>
-            MOTI<Text style={{ color: Colors.cyan }}>coach</Text>
+            League<Text style={{ color: Colors.cyan }}>Matrix</Text>
           </Text>
           <Text style={styles.headerSub}>TEAM CHAT</Text>
         </View>

@@ -11,7 +11,7 @@ import { useCoach } from '../context/CoachContext';
 export default function StatTrackerSummaryScreen() {
   const navigation = useNavigation<any>();
   const route      = useRoute<any>();
-  const { recordGameComplete } = useCoach();
+  const { recordGame } = useCoach();
 
   const {
     config,
@@ -61,6 +61,7 @@ export default function StatTrackerSummaryScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%' }}>
 
         {/* Final Score */}
         <View style={styles.scoreCard}>
@@ -147,6 +148,7 @@ export default function StatTrackerSummaryScreen() {
         )}
 
         <View style={{ height: 32 }} />
+        </View>
       </ScrollView>
 
       {/* Footer */}
@@ -154,8 +156,7 @@ export default function StatTrackerSummaryScreen() {
         <TouchableOpacity
           style={styles.saveBtn}
           onPress={() => {
-            const statCount = Object.values(teamStats).reduce((s, v) => s + v, 0);
-            recordGameComplete(config.sport, 50 + statCount);
+            recordGame(config.sport);
             navigation.navigate('Tabs');
           }}
         >

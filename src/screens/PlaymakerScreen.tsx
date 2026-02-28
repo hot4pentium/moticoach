@@ -276,6 +276,7 @@ export default function PlaymakerScreen({ navigation }: any) {
       </ScrollView>
 
       {/* Play grid */}
+      <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%', flex: 1 }}>
       {filtered.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📋</Text>
@@ -295,6 +296,7 @@ export default function PlaymakerScreen({ navigation }: any) {
           showsVerticalScrollIndicator={false}
         />
       )}
+      </View>
     </SafeAreaView>
   );
 }

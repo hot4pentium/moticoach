@@ -19,6 +19,7 @@ import { Colors, Fonts, Radius, Spacing } from '../theme';
 import { functions, db } from '../lib/firebase';
 import { useCoach } from '../context/CoachContext';
 import { useAuth } from '../context/AuthContext';
+import UpgradePrompt from '../components/UpgradePrompt';
 import { globalPlays } from './PlaymakerScreen';
 import { type Play } from './PlayEditorScreen';
 
@@ -158,8 +159,9 @@ const PRACTICE_STEPS = [
 export default function PrepBookScreen({ navigation, route }: any) {
   const eventTitle  = route?.params?.eventTitle ?? 'Event';
   const eventType   = route?.params?.eventType  ?? 'game';
-  const { coachSport, addXp } = useCoach();
+  const { coachSport, isPaid } = useCoach();
 
+  const [upgradeVisible, setUpgradeVisible] = useState(!isPaid);
   const [currentStep, setCurrentStep] = useState(0);
   const [roster, setRoster]           = useState<Player[]>(MOCK_ROSTER);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
@@ -202,9 +204,6 @@ export default function PrepBookScreen({ navigation, route }: any) {
     const isFinal = currentStep === STEPS.length - 1;
     setCompletedSteps(prev => {
       const next = [...new Set([...prev, currentStep])];
-      if (isFinal && next.length === STEPS.length) {
-        addXp(isPractice ? 15 : 20, isPractice ? 'PRACTICE PREP' : 'GAME PREP');
-      }
       return next;
     });
     if (!isFinal) setCurrentStep(s => s + 1);
@@ -230,6 +229,13 @@ export default function PrepBookScreen({ navigation, route }: any) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
+
+      <UpgradePrompt
+        visible={upgradeVisible}
+        featureName="PREP BOOK"
+        description="Full game and practice prep plans are available on the Pro plan."
+        onDismiss={() => { setUpgradeVisible(false); navigation?.goBack(); }}
+      />
 
       {/* Header */}
       <View style={styles.header}>
@@ -295,6 +301,7 @@ export default function PrepBookScreen({ navigation, route }: any) {
 
       {/* Step Content */}
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%' }}>
 
         {/* Step Card */}
         <View style={styles.stepCard}>
@@ -407,6 +414,7 @@ export default function PrepBookScreen({ navigation, route }: any) {
         )}
 
         <View style={{ height: 120 }} />
+        </View>
       </ScrollView>
 
       {/* Bottom CTA */}

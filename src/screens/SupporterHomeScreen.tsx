@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,17 +7,23 @@ import {
   TouchableOpacity,
   StatusBar,
   Modal,
+  Image,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { signOut } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useCoach } from '../context/CoachContext';
-import { Colors, Fonts, Radius, Spacing } from '../theme';
-import MotiHero from '../components/MotiHero';
-import BadgeShelf from '../components/BadgeShelf';
+import { Colors, Fonts, Gradients, HeroText, Radius, Spacing } from '../theme';
 import BadgeUnlockModal from '../components/BadgeUnlockModal';
+import BadgeShelf from '../components/BadgeShelf';
+import ProfileSheet from '../components/ProfileSheet';
+import InstallPromptBanner from '../components/InstallPromptBanner';
+import { Badge } from '../lib/badges';
 
 // ─── Types & Constants ────────────────────────────────────────────────────────
 
@@ -48,6 +54,14 @@ const TYPE_LABEL: Record<EventType, string> = {
   game:     'GAME',
   practice: 'TRAIN',
   film:     'FILM',
+};
+
+const SPORT_ICON: Record<string, string> = {
+  soccer:     '⚽',
+  basketball: '🏀',
+  football:   '🏈',
+  baseball:   '⚾',
+  volleyball: '🏐',
 };
 
 // ─── Mock Events ─────────────────────────────────────────────────────────────
@@ -109,15 +123,34 @@ function isToday(date: Date): boolean {
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function SupporterHomeScreen() {
-  const { user, role } = useAuth();
-  const { teamXp, motiStage, earnedBadges, pendingBadge, clearPendingBadge } = useCoach();
+  const { user, role, teamCode } = useAuth();
+  const { pendingBadge, clearPendingBadge, earnedBadges, badgeIcon, badgeColor, coachSport } = useCoach();
 
-  const [selectedEvent, setSelectedEvent] = useState<TeamEvent | null>(null);
-  const [sheetVisible,  setSheetVisible]  = useState(false);
-  const [calExpanded,   setCalExpanded]   = useState(false);
+  const [selectedEvent,   setSelectedEvent]   = useState<TeamEvent | null>(null);
+  const [sheetVisible,    setSheetVisible]    = useState(false);
+  const [calExpanded,     setCalExpanded]     = useState(false);
+  const [avatarUrl,       setAvatarUrl]       = useState('');
+  const [profileOpen,     setProfileOpen]     = useState(false);
+  const [teamName,        setTeamName]        = useState('YOUR TEAM');
+  const [selectedBadge,   setSelectedBadge]   = useState<Badge | null>(null);
 
-  const displayName = user?.displayName ?? user?.email?.split('@')[0] ?? 'Fan';
-  const roleLabel   = role === 'athlete' ? 'ATHLETE' : 'SUPPORTER';
+  const roleTag = role === 'athlete' ? 'ATHLETE DASHBOARD' : 'SUPPORTER DASHBOARD';
+
+  useEffect(() => {
+    if (!user) return;
+    getDoc(doc(db, 'users', user.uid)).then(snap => {
+      if (snap.exists() && snap.data().avatarUrl) setAvatarUrl(snap.data().avatarUrl);
+    }).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!teamCode) return;
+    getDoc(doc(db, 'teams', teamCode)).then(snap => {
+      if (snap.exists() && snap.data().teamName) setTeamName(snap.data().teamName);
+    }).catch(() => {});
+  }, [teamCode]);
+
+  const handleAvatarPress = () => setProfileOpen(true);
 
   const openEvent = useCallback((event: TeamEvent) => {
     setSelectedEvent(event);
@@ -146,62 +179,80 @@ export default function SupporterHomeScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.logo}>
-            MOTI<Text style={{ color: Colors.cyan }}>coach</Text>
-          </Text>
-        </View>
-        <View style={styles.headerRight}>
-          <View style={[styles.pill, styles.pillAmber]}>
-            <Text style={[styles.pillText, { color: Colors.amber }]}>{teamXp} XP</Text>
-          </View>
-          <TouchableOpacity onPress={() => signOut(auth)} style={styles.exitBtn} hitSlop={8}>
-            <Text style={styles.exitBtnText}>⏻</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.logo}>
+          League<Text style={{ color: Colors.cyan }}>Matrix</Text>
+        </Text>
+        <TouchableOpacity onPress={() => signOut(auth)} style={styles.exitBtn} hitSlop={8}>
+          <Text style={styles.exitBtnText}>⏻</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%' }}>
 
-        {/* Welcome hero */}
-        <View style={styles.hero}>
+        {/* Hero */}
+        <LinearGradient colors={Gradients.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
           <View style={styles.heroLeft}>
-            <Text style={styles.heroGreet}>WELCOME BACK</Text>
-            <Text style={styles.heroName}>{displayName}</Text>
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>{roleLabel}</Text>
+            <Text style={styles.heroTag}>{roleTag}</Text>
+            <Text style={styles.heroName}>{teamName}</Text>
+            {teamCode && (
+              <View style={styles.teamCodeChip}>
+                <Text style={styles.teamCodeLabel}>CODE</Text>
+                <Text style={styles.teamCodeVal}>{teamCode}</Text>
+              </View>
+            )}
+            <View style={styles.sportBadge}>
+              <Text style={styles.sportBadgeText}>
+                {SPORT_ICON[coachSport] ?? '🏅'}{'  '}{coachSport.toUpperCase()}
+              </Text>
             </View>
           </View>
-          <MotiHero motiStage={motiStage} />
-        </View>
 
-        <View style={styles.sectionDivider} />
-
-        {/* Next event card */}
-        {nextEvent && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>NEXT EVENT</Text>
-            <TouchableOpacity
-              style={styles.nextEventCard}
-              activeOpacity={0.85}
-              onPress={() => openEvent(nextEvent)}
-            >
-              <View style={[styles.necAccent, { backgroundColor: TYPE_COLOR[nextEvent.type] }]} />
-              <View style={styles.necTag}>
-                <View style={[styles.necDot, { backgroundColor: Colors.cyan }]} />
-                <Text style={[styles.necTagText, { color: Colors.cyan }]}>
-                  {isToday(nextEvent.date)
-                    ? `NEXT ${TYPE_LABEL[nextEvent.type]} · TODAY`
-                    : `NEXT ${TYPE_LABEL[nextEvent.type]}`}
-                </Text>
+          {/* Right: Avatar + Badge overlay */}
+          <View style={styles.heroRight}>
+            <TouchableOpacity style={styles.avatarWrap} onPress={handleAvatarPress} activeOpacity={0.8}>
+              <View style={styles.avatarCircle}>
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Ionicons name="person-circle-outline" size={56} color={HeroText.secondary} />
+                )}
               </View>
-              <Text style={styles.necTitle}>{nextEvent.title}</Text>
-              <Text style={styles.necMeta}>
-                🕐 {nextEvent.time}  📍 {nextEvent.location}
-                {nextEvent.playerCount ? `  👥 ${nextEvent.playerCount} Players` : ''}
-              </Text>
+              <View style={[styles.badgeOverlay, { backgroundColor: badgeColor }]}>
+                <MaterialCommunityIcons name={badgeIcon as any} size={20} color="#fff" />
+              </View>
             </TouchableOpacity>
           </View>
+        </LinearGradient>
+
+        {/* Install prompt */}
+        <InstallPromptBanner />
+
+        {/* Badges shelf */}
+        <BadgeShelf earnedBadges={earnedBadges} onBadgePress={setSelectedBadge} />
+
+        {/* Next Event Card */}
+        {nextEvent && (
+          <TouchableOpacity
+            style={styles.nextEventCard}
+            activeOpacity={0.85}
+            onPress={() => openEvent(nextEvent)}
+          >
+            <View style={[styles.necAccent, { backgroundColor: TYPE_COLOR[nextEvent.type] }]} />
+            <View style={styles.necTag}>
+              <View style={[styles.necDot, { backgroundColor: Colors.cyan }]} />
+              <Text style={[styles.necTagText, { color: Colors.cyan }]}>
+                {isToday(nextEvent.date)
+                  ? `NEXT ${TYPE_LABEL[nextEvent.type]} • TODAY`
+                  : `NEXT ${TYPE_LABEL[nextEvent.type]}`}
+              </Text>
+            </View>
+            <Text style={styles.necTitle}>{nextEvent.title}</Text>
+            <Text style={styles.necMeta}>
+              🕐 {nextEvent.time}{'  '}📍 {nextEvent.location}
+              {nextEvent.playerCount ? `  👥 ${nextEvent.playerCount}` : ''}
+            </Text>
+          </TouchableOpacity>
         )}
 
         <View style={styles.sectionDivider} />
@@ -209,14 +260,10 @@ export default function SupporterHomeScreen() {
         {/* Schedule */}
         <View style={styles.scheduleSection}>
           <View style={styles.scheduleHead}>
-            <Text style={styles.sectionLabel}>SCHEDULE</Text>
+            <Text style={styles.sectionTitle}>SCHEDULE</Text>
           </View>
 
-          <WeekRow
-            weekStart={weeks[0]}
-            days={getWeekDays(weeks[0])}
-            onEventPress={openEvent}
-          />
+          <WeekRow weekStart={weeks[0]} days={getWeekDays(weeks[0])} onEventPress={openEvent} />
 
           <TouchableOpacity
             style={styles.expandRow}
@@ -228,68 +275,129 @@ export default function SupporterHomeScreen() {
           </TouchableOpacity>
 
           {calExpanded && weeks.slice(1).map((weekStart, wi) => (
-            <WeekRow
-              key={wi}
-              weekStart={weekStart}
-              days={getWeekDays(weekStart)}
-              onEventPress={openEvent}
-            />
+            <WeekRow key={wi} weekStart={weekStart} days={getWeekDays(weekStart)} onEventPress={openEvent} />
           ))}
         </View>
 
         <View style={styles.sectionDivider} />
 
-        {/* Quick links */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>EXPLORE</Text>
-          <View style={styles.quickGrid}>
-            <QuickLink icon="people-outline"     label="ROSTER"     desc="View the team"    />
-            <QuickLink icon="book-outline"        label="PLAYBOOK"   desc="Study the plays"  />
-            {role === 'athlete'
-              ? <QuickLink icon="bar-chart-outline" label="STATS"    desc="Your performance" />
-              : <QuickLink icon="sparkles-outline"  label="MOTI"     desc="Team spirit meter"/>
-            }
-            <QuickLink icon="trophy-outline"      label="HIGHLIGHTS" desc="Coming soon"  dim />
-          </View>
-        </View>
-
-        <View style={styles.sectionDivider} />
-
-        {/* Team Achievements */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>TEAM ACHIEVEMENTS</Text>
-          <View style={styles.motiCard}>
-            <View style={styles.motiCardLeft}>
-              <Text style={styles.motiXp}>{teamXp} XP EARNED TOGETHER</Text>
-            </View>
-            <View style={styles.motiCardRight}>
-              <Text style={styles.motiEmoji}>🏆</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Badge Shelf */}
-        <BadgeShelf earnedBadges={earnedBadges} />
+        {/* Team Access Grid */}
+        <TeamAccessGrid role={role} />
 
         <View style={{ height: 32 }} />
+        </View>
       </ScrollView>
 
-      {/* Badge Unlock Modal */}
-      <BadgeUnlockModal
-        badge={pendingBadge}
-        motiStage={motiStage}
-        onDismiss={clearPendingBadge}
-      />
+      {/* Badge Detail Modal */}
+      {selectedBadge && (
+        <View style={styles.badgeOverlayFull} pointerEvents="box-none">
+          <TouchableOpacity style={styles.badgeBackdrop} activeOpacity={1} onPress={() => setSelectedBadge(null)} />
+          <View style={styles.badgeModal}>
+            <View style={[styles.badgeModalIcon, { backgroundColor: selectedBadge.color + '20', borderColor: selectedBadge.color + '50' }]}>
+              <MaterialCommunityIcons name={selectedBadge.icon as any} size={48} color={selectedBadge.color} />
+            </View>
+            <Text style={[styles.badgeModalName, { color: selectedBadge.color }]}>{selectedBadge.name}</Text>
+            <Text style={styles.badgeModalDesc}>{selectedBadge.description}</Text>
+            <View style={[styles.badgeCatPill, { borderColor: selectedBadge.color + '40', backgroundColor: selectedBadge.color + '12' }]}>
+              <Text style={[styles.badgeCatText, { color: selectedBadge.color }]}>{selectedBadge.category.toUpperCase()}</Text>
+            </View>
+            <TouchableOpacity style={styles.badgeCloseBtn} onPress={() => setSelectedBadge(null)}>
+              <Text style={styles.badgeCloseBtnText}>CLOSE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
-      {/* Event sheet */}
-      <EventSheet
-        event={selectedEvent}
-        visible={sheetVisible}
-        onClose={closeSheet}
+      {/* Badge Unlock Modal */}
+      <BadgeUnlockModal badge={pendingBadge} onDismiss={clearPendingBadge} />
+
+      {/* Event Sheet */}
+      <EventSheet event={selectedEvent} visible={sheetVisible} onClose={closeSheet} />
+
+      {/* Profile Sheet */}
+      <ProfileSheet
+        visible={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        avatarUrl={avatarUrl || null}
+        onAvatarChange={setAvatarUrl}
       />
     </SafeAreaView>
   );
 }
+
+// ─── Team Access Grid ─────────────────────────────────────────────────────────
+
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+const TEAM_TOOLS = [
+  { label: 'Roster',     sub: 'View the team',     icon: 'people-outline'    as IoniconsName, color: Colors.blue,   athleteOnly: false, locked: false },
+  { label: 'Playbook',   sub: 'Study the plays',   icon: 'easel-outline'     as IoniconsName, color: Colors.cyan,   athleteOnly: false, locked: false },
+  { label: 'My Stats',   sub: 'Your performance',  icon: 'bar-chart-outline' as IoniconsName, color: Colors.green,  athleteOnly: true,  locked: false },
+  { label: 'Highlights', sub: 'Coming soon',       icon: 'film-outline'      as IoniconsName, color: Colors.purple, athleteOnly: false, locked: true  },
+];
+
+function TeamAccessGrid({ role }: { role: string | null }) {
+  return (
+    <View style={gridStyles.section}>
+      <View style={gridStyles.header}>
+        <Text style={gridStyles.headerLabel}>TEAM ACCESS</Text>
+      </View>
+      <View style={gridStyles.grid}>
+        {TEAM_TOOLS.map(tool => {
+          const isLocked = tool.locked || (tool.athleteOnly && role !== 'athlete');
+          return (
+            <TouchableOpacity
+              key={tool.label}
+              style={[gridStyles.card, isLocked && gridStyles.cardLocked]}
+              activeOpacity={isLocked ? 0.7 : 0.78}
+              disabled={isLocked}
+            >
+              <View style={[gridStyles.accentBar, { backgroundColor: isLocked ? Colors.muted : tool.color }]} />
+              <View style={[gridStyles.iconWrap, { backgroundColor: isLocked ? Colors.bgDeep : `${tool.color}18` }]}>
+                <Ionicons name={tool.icon} size={24} color={isLocked ? Colors.muted : tool.color} />
+              </View>
+              <Text style={[gridStyles.label, { color: isLocked ? Colors.muted : tool.color }]}>{tool.label}</Text>
+              <Text style={gridStyles.sub}>{tool.sub}</Text>
+              {isLocked && (
+                <View style={gridStyles.lockedBadge}>
+                  <Ionicons name="lock-closed" size={8} color={Colors.muted} />
+                  <Text style={gridStyles.lockedBadgeText}>SOON</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const gridStyles = StyleSheet.create({
+  section:     { paddingHorizontal: Spacing.lg, paddingTop: 4 },
+  header:      { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
+  headerLabel: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, letterSpacing: 2 },
+  grid:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  card: {
+    width: '48%' as any,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    gap: 4,
+    overflow: 'hidden',
+    boxShadow: 'inset 0 2px 8px rgba(0,50,150,0.08), inset 0 -1px 4px rgba(255,255,255,0.7), 0 2px 6px rgba(0,0,0,0.04)' as any,
+  },
+  cardLocked:      { opacity: 0.6, backgroundColor: Colors.bgDeep },
+  accentBar:       { position: 'absolute' as any, top: 0, left: 0, right: 0, height: 3 },
+  iconWrap:        { width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  label:           { fontFamily: Fonts.rajdhaniBold, fontSize: 17, letterSpacing: 0.3 },
+  sub:             { fontFamily: Fonts.mono, fontSize: 8, color: Colors.dim, letterSpacing: 0.2, lineHeight: 12 },
+  lockedBadge:     { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  lockedBadgeText: { fontFamily: Fonts.mono, fontSize: 7, color: Colors.muted, letterSpacing: 1 },
+});
 
 // ─── Week Row ─────────────────────────────────────────────────────────────────
 
@@ -366,7 +474,12 @@ function DayCard({
       <Text style={[styles.dayCardMonth,   !hasEvent && styles.dimText]}>{MONTHS[date.getMonth()]}</Text>
       <Text style={[styles.dayCardNum,     !hasEvent && styles.dimText]}>{date.getDate()}</Text>
       {hasEvent ? (
-        <Text style={[styles.dayCardType, { color }]}>{TYPE_LABEL[event!.type]}</Text>
+        <>
+          <Text style={[styles.dayCardType, { color }]}>{TYPE_LABEL[event!.type]}</Text>
+          {event?.opponent && (
+            <Text style={styles.dayCardOpp} numberOfLines={1}>{event.opponent}</Text>
+          )}
+        </>
       ) : (
         <Text style={styles.dayCardPlus}>+</Text>
       )}
@@ -390,60 +503,52 @@ function EventSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={onClose} />
-      <View style={styles.sheet}>
-        <View style={[styles.sheetAccent, { backgroundColor: color }]} />
-        <View style={styles.sheetHandle} />
-
-        <View style={styles.sheetBody}>
-          <View style={[styles.sheetBadge, { backgroundColor: color + '18', borderColor: color + '44' }]}>
-            <Text style={[styles.sheetBadgeText, { color }]}>
-              {event.type === 'game' ? '⚽' : event.type === 'practice' ? '🏃' : '🎬'}
-              {'  '}{TYPE_LABEL[event.type]} DAY
-            </Text>
-          </View>
-          <Text style={styles.sheetTitle}>{event.title}</Text>
-          <View style={styles.sheetMeta}>
-            <Text style={styles.sheetMetaText}>🕐 {event.time}</Text>
-            <Text style={styles.sheetMetaText}>📍 {event.location}</Text>
-            {event.playerCount && (
-              <Text style={styles.sheetMetaText}>👥 {event.playerCount} Players</Text>
+      <View style={{ flex: 1, justifyContent: 'flex-end', alignItems: 'center' }}>
+        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
+        <View style={styles.sheet}>
+          <View style={[styles.sheetAccent, { backgroundColor: color }]} />
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetBody}>
+            <View style={[styles.sheetBadge, { backgroundColor: color + '18', borderColor: color + '44' }]}>
+              <Text style={[styles.sheetBadgeText, { color }]}>
+                {event.type === 'game' ? '⚽' : event.type === 'practice' ? '🏃' : '🎬'}
+                {'  '}{TYPE_LABEL[event.type]} DAY
+              </Text>
+            </View>
+            <Text style={styles.sheetTitle}>{event.title}</Text>
+            <View style={styles.sheetMeta}>
+              <Text style={styles.sheetMetaText}>🕐 {event.time}</Text>
+              <Text style={styles.sheetMetaText}>📍 {event.location}</Text>
+              {event.playerCount && (
+                <Text style={styles.sheetMetaText}>👥 {event.playerCount} Players</Text>
+              )}
+            </View>
+            {event.type === 'game' && (
+              <TouchableOpacity style={styles.gdlBtn} activeOpacity={0.85}>
+                <Text style={styles.gdlBtnText}>⚡ GAME DAY LIVE</Text>
+                <Text style={styles.gdlBtnSub}>Coming soon</Text>
+              </TouchableOpacity>
             )}
           </View>
-          {event.type === 'game' && (
-            <TouchableOpacity style={styles.gdlBtn} activeOpacity={0.85}>
-              <Text style={styles.gdlBtnText}>⚡ GAME DAY LIVE</Text>
-              <Text style={styles.gdlBtnSub}>Coming soon</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity onPress={onClose} style={styles.sheetCloseBtn}>
+            <Text style={styles.sheetCloseBtnText}>CLOSE</Text>
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity onPress={onClose} style={styles.sheetCloseBtn}>
-          <Text style={styles.sheetCloseBtnText}>CLOSE</Text>
-        </TouchableOpacity>
       </View>
     </Modal>
-  );
-}
-
-// ─── Quick Link ───────────────────────────────────────────────────────────────
-
-type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
-
-function QuickLink({ icon, label, desc, dim }: { icon: IoniconsName; label: string; desc: string; dim?: boolean }) {
-  return (
-    <TouchableOpacity style={[styles.qlCard, dim && { opacity: 0.4 }]} activeOpacity={dim ? 1 : 0.75}>
-      <Ionicons name={icon} size={22} color={dim ? Colors.muted : Colors.cyan} style={styles.qlIcon} />
-      <Text style={styles.qlLabel}>{label}</Text>
-      <Text style={styles.qlDesc}>{desc}</Text>
-    </TouchableOpacity>
   );
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+    backgroundImage: 'radial-gradient(rgba(37,99,235,0.13) 1.5px, transparent 1.5px)' as any,
+    backgroundSize: '22px 22px' as any,
+  },
+  scroll: { flex: 1 },
 
   header: {
     flexDirection: 'row',
@@ -453,73 +558,113 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border2,
-    backgroundColor: 'rgba(5,10,22,0.98)',
+    backgroundColor: Colors.bg,
   },
-  logo: { fontFamily: Fonts.orbitron, fontSize: 15, color: Colors.text, letterSpacing: 3 },
-  headerRight: { flexDirection: 'row', gap: 6 },
-  pill: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border2,
-    backgroundColor: 'rgba(61,143,255,0.07)',
-  },
-  pillAmber: {
-    borderColor: 'rgba(212,168,83,0.3)',
-    backgroundColor: 'rgba(212,168,83,0.07)',
-  },
-  pillText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.blue, letterSpacing: 0.5 },
-  exitBtn: { paddingHorizontal: 8, paddingVertical: 3, marginLeft: 2 },
+  logo:        { fontFamily: Fonts.rajdhaniBold, fontSize: 18, color: Colors.blue, letterSpacing: 1 },
+  exitBtn:     { paddingHorizontal: 8, paddingVertical: 3, marginLeft: 2 },
   exitBtnText: { fontSize: 15, color: Colors.muted },
 
+  // Hero — matches DashboardScreen exactly
   hero: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xl,
-    paddingBottom: Spacing.lg,
-    backgroundColor: '#000',
+    paddingBottom: 60,
+    minHeight: 220,
+    gap: Spacing.xl,
+    borderRadius: 28,
+    borderBottomLeftRadius: 72,
+    borderBottomRightRadius: 72,
+    boxShadow: '0 16px 48px rgba(21,101,192,0.45), 0 4px 16px rgba(0,0,0,0.22)' as any,
   },
   heroLeft: { flex: 1 },
-  heroGreet: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, letterSpacing: 2, marginBottom: 4 },
-  heroName:  { fontFamily: Fonts.orbitron, fontSize: 26, color: Colors.text, marginBottom: 10 },
-  roleBadge: {
+  heroRight: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    width: 120,
+  },
+  heroTag: {
+    fontFamily: Fonts.mono,
+    fontSize: 9,
+    color: HeroText.secondary,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  heroName: {
+    fontFamily: Fonts.rajdhaniBold,
+    fontSize: 32,
+    color: HeroText.primary,
+    lineHeight: 34,
+    marginBottom: 8,
+  },
+  teamCodeChip: {
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    marginBottom: 6,
+  },
+  teamCodeLabel: { fontFamily: Fonts.mono, fontSize: 7, color: HeroText.muted, letterSpacing: 1 },
+  teamCodeVal:   { fontFamily: Fonts.monoBold, fontSize: 10, color: HeroText.primary, letterSpacing: 1.5 },
+  sportBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: `${Colors.cyan}44`,
-    backgroundColor: `${Colors.cyan}10`,
+    borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  roleBadgeText: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.cyan, letterSpacing: 1.5 },
+  sportBadgeText: { fontFamily: Fonts.mono, fontSize: 9, color: HeroText.secondary, letterSpacing: 1 },
 
-  sectionDivider: {
-    marginHorizontal: Spacing.lg,
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: 20,
-    opacity: 0.6,
+  avatarWrap: { position: 'relative', width: 100, height: 100 },
+  avatarCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  section:      { paddingHorizontal: Spacing.lg },
-  sectionLabel: {
-    fontFamily: Fonts.mono,
-    fontSize: 9,
-    color: Colors.dim,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    marginBottom: 12,
+  avatarImage: { width: 100, height: 100 },
+  badgeOverlay: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#1565c0',
   },
 
-  // Next event card
+  // Next Event Card
   nextEventCard: {
+    marginHorizontal: Spacing.lg,
+    marginTop: 20,
+    marginBottom: 8,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
-    backgroundColor: 'rgba(15,35,90,0.95)',
+    backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border2,
     overflow: 'hidden',
+    boxShadow: 'inset 0 2px 8px rgba(0,50,150,0.1), inset 0 -1px 4px rgba(255,255,255,0.7), 0 2px 8px rgba(0,0,0,0.06)' as any,
   },
   necAccent:  { position: 'absolute', top: 0, left: 0, right: 0, height: 3, opacity: 0.9 },
   necTag:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
@@ -528,13 +673,30 @@ const styles = StyleSheet.create({
   necTitle:   { fontFamily: Fonts.orbitron, fontSize: 22, color: Colors.text, marginBottom: 6 },
   necMeta:    { fontFamily: Fonts.rajdhani, fontSize: 12, color: Colors.dim },
 
+  sectionDivider: {
+    marginHorizontal: Spacing.lg,
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 20,
+    opacity: 0.6,
+  },
+
   // Schedule
   scheduleSection: { paddingTop: 0 },
   scheduleHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     marginBottom: 12,
   },
-
+  sectionTitle: {
+    fontFamily: Fonts.mono,
+    fontSize: 9,
+    color: Colors.dim,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
   expandRow: {
     marginHorizontal: Spacing.lg,
     marginBottom: 12,
@@ -545,12 +707,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(61,143,255,0.04)',
     alignItems: 'center',
   },
-  expandText: {
-    fontFamily: Fonts.mono,
-    fontSize: 9,
-    color: Colors.cyan,
-    letterSpacing: 1.5,
-  },
+  expandText: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.cyan, letterSpacing: 1.5 },
 
   weekRow:       { marginBottom: 16 },
   weekLabel:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: Spacing.lg, marginBottom: 8 },
@@ -569,6 +726,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     alignItems: 'center',
     overflow: 'hidden',
+    boxShadow: 'inset 0 2px 6px rgba(0,50,150,0.08), inset 0 -1px 3px rgba(255,255,255,0.6)' as any,
   },
   dayCardEmpty:   { opacity: 0.35 },
   dayCardToday:   { borderColor: 'rgba(0,212,255,0.5)' },
@@ -577,15 +735,15 @@ const styles = StyleSheet.create({
   dayCardMonth:   { fontFamily: Fonts.mono, fontSize: 7, color: Colors.dim, textTransform: 'uppercase', letterSpacing: 0.5 },
   dayCardNum:     { fontFamily: Fonts.orbitron, fontSize: 18, color: Colors.text, lineHeight: 22, marginBottom: 2 },
   dayCardType:    { fontFamily: Fonts.mono, fontSize: 7, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+  dayCardOpp:     { fontFamily: Fonts.mono, fontSize: 6, color: Colors.amber, marginTop: 1, maxWidth: 60, textAlign: 'center' },
   dayCardPlus:    { fontFamily: Fonts.mono, fontSize: 16, color: Colors.muted, marginTop: 4 },
   dimText:        { opacity: 0.4 },
 
   // Event sheet
-  sheetOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)' },
   sheet: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    backgroundColor: '#080f22',
+    width: '100%',
+    maxWidth: 600,
+    backgroundColor: Colors.card,
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
     borderWidth: 1,
@@ -603,7 +761,7 @@ const styles = StyleSheet.create({
   sheetBody:      { paddingHorizontal: Spacing.xl, paddingBottom: 8 },
   sheetBadge:     { alignSelf: 'flex-start', borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 10 },
   sheetBadgeText: { fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, fontWeight: '600' },
-  sheetTitle:     { fontFamily: Fonts.orbitron, fontSize: 24, color: Colors.text, lineHeight: 28, marginBottom: 10 },
+  sheetTitle:     { fontFamily: Fonts.rajdhaniBold, fontSize: 26, color: Colors.text, lineHeight: 30, marginBottom: 10 },
   sheetMeta:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
   sheetMetaText:  { fontFamily: Fonts.rajdhani, fontSize: 12, color: Colors.dim },
   gdlBtn: {
@@ -615,40 +773,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  gdlBtnText: { fontFamily: Fonts.orbitron, fontSize: 12, color: Colors.amber, letterSpacing: 1.5 },
-  gdlBtnSub:  { fontFamily: Fonts.mono, fontSize: 8, color: Colors.muted, marginTop: 3, letterSpacing: 1 },
+  gdlBtnText:        { fontFamily: Fonts.orbitron, fontSize: 12, color: Colors.amber, letterSpacing: 1.5 },
+  gdlBtnSub:         { fontFamily: Fonts.mono, fontSize: 8, color: Colors.muted, marginTop: 3, letterSpacing: 1 },
   sheetCloseBtn:     { alignItems: 'center', paddingVertical: 16 },
   sheetCloseBtnText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.muted, letterSpacing: 1 },
 
-  // Quick links
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  qlCard: {
-    width: '47.5%',
+  // Badge detail overlay
+  badgeOverlayFull: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 300,
+  },
+  badgeBackdrop: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  badgeModal: {
     backgroundColor: Colors.card,
+    borderRadius: Radius.xl,
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
+    borderColor: Colors.border2,
+    padding: Spacing.xxl,
     alignItems: 'center',
+    gap: Spacing.md,
+    width: 260,
   },
-  qlIcon:  { marginBottom: 6 },
-  qlLabel: { fontFamily: Fonts.orbitron, fontSize: 10, color: Colors.text, letterSpacing: 1, marginBottom: 2 },
-  qlDesc:  { fontFamily: Fonts.mono, fontSize: 8, color: Colors.dim, letterSpacing: 0.5 },
-
-  // MOTI card
-  motiCard: {
-    flexDirection: 'row',
+  badgeModalIcon: {
+    width: 96, height: 96, borderRadius: 48,
+    borderWidth: 2,
     alignItems: 'center',
-    borderRadius: Radius.lg,
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
+  badgeModalName: {
+    fontFamily: Fonts.orbitron,
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+  badgeModalDesc: {
+    fontFamily: Fonts.rajdhani,
+    fontSize: 15,
+    color: Colors.dim,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  badgeCatPill: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: `${Colors.cyan}33`,
-    backgroundColor: `${Colors.cyan}07`,
-    padding: Spacing.lg,
   },
-  motiCardLeft:   { flex: 1 },
-  motiStageLabel: { fontFamily: Fonts.mono, fontSize: 8, color: Colors.dim, letterSpacing: 1.5, marginBottom: 2 },
-  motiStageName:  { fontFamily: Fonts.orbitron, fontSize: 18, color: Colors.cyan, marginBottom: 4 },
-  motiXp:         { fontFamily: Fonts.mono, fontSize: 9, color: Colors.muted, letterSpacing: 0.5 },
-  motiCardRight:  { marginLeft: 12 },
-  motiEmoji:      { fontSize: 32 },
+  badgeCatText:     { fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5 },
+  badgeCloseBtn:    { marginTop: Spacing.xs, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border2 },
+  badgeCloseBtnText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.dim, letterSpacing: 1.5 },
 });

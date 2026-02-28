@@ -8,14 +8,19 @@ import {
   TouchableOpacity,
   Modal,
   StatusBar,
-  PanResponder,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Fonts, Radius, Spacing } from '../theme';
-import MotiHero from '../components/MotiHero';
-import BadgeShelf from '../components/BadgeShelf';
+import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Colors, Fonts, Gradients, HeroText, Radius, Spacing } from '../theme';
 import BadgeUnlockModal from '../components/BadgeUnlockModal';
+import BadgeShelf from '../components/BadgeShelf';
+import { Badge } from '../lib/badges';
+import TeamSettingsSheet from '../components/TeamSettingsSheet';
+import InstallPromptBanner from '../components/InstallPromptBanner';
 import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useCoach } from '../context/CoachContext';
@@ -36,7 +41,6 @@ interface TeamEvent {
   date: Date;
   time: string;
   location: string;
-  prepPct: number;
   playerCount?: number;
 }
 
@@ -50,66 +54,12 @@ const d = (offsetDays: number) => {
 };
 
 const MOCK_EVENTS: TeamEvent[] = [
-  {
-    id: '1',
-    type: 'game',
-    title: 'vs Eagles SC',
-    opponent: 'Eagles SC',
-    date: d(0),
-    time: '6:30 PM',
-    location: 'Turf Stadium',
-    prepPct: 46,
-    playerCount: 18,
-  },
-  {
-    id: '2',
-    type: 'practice',
-    title: 'PRACTICE',
-    date: d(2),
-    time: '4:30 PM',
-    location: 'Field B',
-    prepPct: 0,
-  },
-  {
-    id: '3',
-    type: 'film',
-    title: 'FILM SESSION',
-    date: d(4),
-    time: '6:00 PM',
-    location: 'Rec Center',
-    prepPct: 0,
-  },
-  {
-    id: '4',
-    type: 'game',
-    title: 'vs Storm United',
-    opponent: 'Storm United',
-    date: d(7),
-    time: '10:00 AM',
-    location: 'Riverside Park',
-    prepPct: 0,
-    playerCount: 18,
-  },
-  {
-    id: '5',
-    type: 'practice',
-    title: 'PRACTICE',
-    date: d(9),
-    time: '4:30 PM',
-    location: 'Field B',
-    prepPct: 0,
-  },
-  {
-    id: '6',
-    type: 'game',
-    title: 'vs North Eagles',
-    opponent: 'North Eagles',
-    date: d(14),
-    time: '11:00 AM',
-    location: 'Central Stadium',
-    prepPct: 0,
-    playerCount: 18,
-  },
+  { id: '1', type: 'game',     title: 'vs Eagles SC',    opponent: 'Eagles SC',   date: d(0),  time: '6:30 PM',  location: 'Turf Stadium',    playerCount: 18 },
+  { id: '2', type: 'practice', title: 'PRACTICE',                                  date: d(2),  time: '4:30 PM',  location: 'Field B' },
+  { id: '3', type: 'film',     title: 'FILM SESSION',                               date: d(4),  time: '6:00 PM',  location: 'Rec Center' },
+  { id: '4', type: 'game',     title: 'vs Storm United', opponent: 'Storm United', date: d(7),  time: '10:00 AM', location: 'Riverside Park',  playerCount: 18 },
+  { id: '5', type: 'practice', title: 'PRACTICE',                                  date: d(9),  time: '4:30 PM',  location: 'Field B' },
+  { id: '6', type: 'game',     title: 'vs North Eagles', opponent: 'North Eagles', date: d(14), time: '11:00 AM', location: 'Central Stadium', playerCount: 18 },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -177,8 +127,6 @@ function isToday(date: Date): boolean {
 
 // ─── Colour desaturation utility ─────────────────────────────────────────────
 
-const GREY_SLIDER_W = 60;
-
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
   return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
@@ -208,17 +156,17 @@ function desaturate(color: string, amount: number): string {
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
-  const { coachSport, greyScale, setGreyScale, teamXp, motiStage, earnedBadges, pendingBadge, clearPendingBadge } = useCoach();
+  const { coachSport, greyScale, earnedBadges, pendingBadge, clearPendingBadge,
+          avatarUrl, badgeIcon, badgeColor, settingsOpen, openSettings, closeSettings } = useCoach();
   const { user } = useAuth();
   const navigation = useNavigation<any>();
   const { width: sw, height: sh } = useWindowDimensions();
   const [selectedEvent, setSelectedEvent] = useState<TeamEvent | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
   // Onboarding — keyed per user so each new account sees it fresh
-  const onboarding = useOnboarding(`dashboard_${user?.uid ?? 'anon'}`, 3);
-  const motiRef    = useRef<View>(null);
+  const onboarding = useOnboarding(`dashboard_${user?.uid ?? 'anon'}`, 2);
   const codeRef    = useRef<View>(null);
-  const [motiLayout, setMotiLayout] = useState<TargetLayout | null>(null);
   const [codeLayout, setCodeLayout] = useState<TargetLayout | null>(null);
 
   const measureRef = (ref: React.RefObject<View | null>, setter: (l: TargetLayout) => void) => {
@@ -240,30 +188,11 @@ export default function DashboardScreen() {
   const navBarLayout: TargetLayout = { x: 0, y: sh - 70, width: sw, height: 70 };
 
   const TIPS = [
-    { title: 'MEET YOUR MOTI',   body: 'Tap the character to animate it. Daily check-ins, completed tasks, and team wins all help your MOTI grow and unlock new looks.',                                              layout: motiLayout,   arrowSide: 'top'    as const },
-    { title: 'YOUR TEAM CODE',   body: `Share ${TEAM_CODE} with your players — they enter it on signup to auto-join your roster.`,                                                                                    layout: codeLayout,   arrowSide: 'top'    as const },
-    { title: 'YOUR NAVIGATION',  body: 'HOME keeps you on the dashboard. EVENTS manages your schedule. MOTI is your character hub. TOOLS is where you run games — stat tracker, playmaker, prep book and more.',    layout: navBarLayout, arrowSide: 'bottom' as const },
+    { title: 'YOUR TEAM CODE',  body: `Share ${TEAM_CODE} with your players — they enter it on signup to auto-join your roster.`,                                            layout: codeLayout,   arrowSide: 'top'    as const },
+    { title: 'YOUR NAVIGATION', body: 'HOME keeps you on the dashboard. BADGES tracks season achievements. TOOLS is where you run games — stat tracker, playmaker, prep book and more.', layout: navBarLayout, arrowSide: 'bottom' as const },
   ];
 
   const currentTip = TIPS[onboarding.step];
-
-  // Greyscale slider – greyScale lives in context so all subcomponents see it
-  const greyScaleRef = useRef(greyScale);
-  greyScaleRef.current = greyScale; // keep ref fresh on every render
-  const dragStart = useRef(0);
-  const sliderPanHandlers = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        // Invert: right = full colour (0), left = full grey (1)
-        dragStart.current = (1 - greyScaleRef.current) * GREY_SLIDER_W;
-      },
-      onPanResponderMove: (_, { dx }) => {
-        const raw = Math.min(GREY_SLIDER_W, Math.max(0, dragStart.current + dx));
-        setGreyScale(1 - raw / GREY_SLIDER_W);
-      },
-    })
-  ).current.panHandlers;
 
   // Convenience shorthand used throughout this component's JSX
   const ds = (color: string) => desaturate(color, greyScale);
@@ -295,24 +224,10 @@ export default function DashboardScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.logo}>
-          MOTI<Text style={{ color: ds(Colors.cyan) }}>coach</Text>
+          League<Text style={{ color: ds(Colors.cyan) }}>Matrix</Text>
         </Text>
 
-        {/* Greyscale slider */}
-        <View style={styles.greySliderWrap}>
-          <Text style={styles.greySliderIcon}>◑</Text>
-          <View style={styles.greyTrack}>
-            <View
-              style={[styles.greyThumb, { left: (1 - greyScale) * GREY_SLIDER_W - 8 }]}
-              {...sliderPanHandlers}
-            />
-          </View>
-        </View>
-
         <View style={styles.headerPills}>
-          <View style={[styles.pill, styles.pillAmber]}>
-            <Text style={[styles.pillText, { color: Colors.amber }]}>{teamXp} XP</Text>
-          </View>
           <TouchableOpacity onPress={() => signOut(auth)} style={styles.exitBtn} hitSlop={8}>
             <Text style={styles.exitBtnText}>⏻</Text>
           </TouchableOpacity>
@@ -321,9 +236,10 @@ export default function DashboardScreen() {
 
       <View style={{ flex: 1 }}>
         <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%' }}>
 
         {/* Hero */}
-        <View style={styles.hero}>
+        <LinearGradient colors={Gradients.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
           <View style={styles.heroLeft}>
             <Text style={styles.heroTag}>COACH DASHBOARD</Text>
             <Text style={styles.heroName}>Riverside{'\n'}Rockets</Text>
@@ -341,15 +257,29 @@ export default function DashboardScreen() {
               </Text>
             </View>
           </View>
-          <View ref={motiRef} onLayout={() => measureRef(motiRef, setMotiLayout)}>
-            <MotiHero motiStage={motiStage} />
+
+          {/* Right: Avatar + Badge */}
+          <View style={styles.heroRight}>
+            <TouchableOpacity style={styles.avatarWrap} onPress={openSettings} activeOpacity={0.8}>
+              <View style={styles.avatarCircle}>
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Ionicons name="person-circle-outline" size={56} color={HeroText.secondary} />
+                )}
+              </View>
+              <View style={[styles.badgeOverlay, { backgroundColor: badgeColor }]}>
+                <MaterialCommunityIcons name={badgeIcon as any} size={20} color="#fff" />
+              </View>
+            </TouchableOpacity>
           </View>
-        </View>
+        </LinearGradient>
 
-        {/* Badge Shelf */}
-        <BadgeShelf earnedBadges={earnedBadges} />
+        {/* Install prompt */}
+        <InstallPromptBanner />
 
-        <View style={{ height: Spacing.xl }} />
+        {/* Badges shelf */}
+        <BadgeShelf earnedBadges={earnedBadges} onBadgePress={setSelectedBadge} />
 
         {/* Next Event Card */}
         {nextEvent && (
@@ -369,8 +299,8 @@ export default function DashboardScreen() {
             </View>
             <Text style={styles.necTitle}>{nextEvent.title}</Text>
             <Text style={styles.necMeta}>
-              🕐 {nextEvent.time}  📍 {nextEvent.location}
-              {nextEvent.playerCount ? `  👥 ${nextEvent.playerCount} Players` : ''}
+              🕐 {nextEvent.time}{'  '}📍 {nextEvent.location}
+              {nextEvent.playerCount ? `  👥 ${nextEvent.playerCount}` : ''}
             </Text>
           </TouchableOpacity>
         )}
@@ -382,9 +312,6 @@ export default function DashboardScreen() {
         <View style={styles.scheduleSection}>
           <View style={styles.scheduleHead}>
             <Text style={styles.sectionTitle}>SCHEDULE</Text>
-            <TouchableOpacity style={styles.addEventBtn}>
-              <Text style={[styles.addEventText, { color: ds(Colors.cyan) }]}>+ ADD EVENT</Text>
-            </TouchableOpacity>
           </View>
 
           {/* Current week — always visible */}
@@ -408,49 +335,45 @@ export default function DashboardScreen() {
         {/* Section divider */}
         <View style={styles.sectionDivider} />
 
-        {/* Prep Score + CTA */}
-        {nextEvent && (
-          <View style={styles.prepRow}>
-            <View style={styles.prepScoreWrap}>
-              <View style={[styles.prepCircle,
-                { borderColor: nextEvent.prepPct > 0 ? ds(Colors.amber) : Colors.border }]}>
-                <Text style={[styles.prepNum,
-                  { color: nextEvent.prepPct > 0 ? ds(Colors.amber) : Colors.muted }]}>
-                  {nextEvent.prepPct}
-                </Text>
-              </View>
-              <View>
-                <Text style={styles.prepLabel}>PREP SCORE</Text>
-                <Text style={styles.prepSub}>
-                  {nextEvent.prepPct > 0 ? '3 of 6 steps done' : 'Not started'}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={[styles.necCta, { backgroundColor: ds(TYPE_COLOR[nextEvent.type]) }]}
-              onPress={() => openEvent(nextEvent)}
-            >
-              <Text style={styles.necCtaText}>▶ PREP NOW</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Section divider */}
-        <View style={styles.sectionDivider} />
-
-        {/* Player Pulse */}
-        <PlayerPulse />
+        {/* Tools Grid */}
+        <ToolsGrid />
 
         <View style={{ height: 32 }} />
+          </View>
         </ScrollView>
 
       </View>
 
+      {/* Badge Detail Modal */}
+      {selectedBadge && (
+        <View style={styles.badgeOverlayFull} pointerEvents="box-none">
+          <TouchableOpacity style={styles.badgeBackdrop} activeOpacity={1} onPress={() => setSelectedBadge(null)} />
+          <View style={styles.badgeModal}>
+            <View style={[styles.badgeModalIcon, { backgroundColor: selectedBadge.color + '20', borderColor: selectedBadge.color + '50' }]}>
+              <MaterialCommunityIcons name={selectedBadge.icon as any} size={48} color={selectedBadge.color} />
+            </View>
+            <Text style={[styles.badgeModalName, { color: selectedBadge.color }]}>{selectedBadge.name}</Text>
+            <Text style={styles.badgeModalDesc}>{selectedBadge.description}</Text>
+            <View style={[styles.badgeCatPill, { borderColor: selectedBadge.color + '40', backgroundColor: selectedBadge.color + '12' }]}>
+              <Text style={[styles.badgeCatText, { color: selectedBadge.color }]}>{selectedBadge.category.toUpperCase()}</Text>
+            </View>
+            <TouchableOpacity style={styles.badgeCloseBtn} onPress={() => setSelectedBadge(null)}>
+              <Text style={styles.badgeCloseBtnText}>CLOSE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Badge Unlock Modal */}
       <BadgeUnlockModal
         badge={pendingBadge}
-        motiStage={motiStage}
         onDismiss={clearPendingBadge}
+      />
+
+      {/* Team Settings Sheet */}
+      <TeamSettingsSheet
+        visible={settingsOpen}
+        onClose={closeSettings}
       />
 
       {/* Event Preview Sheet */}
@@ -465,7 +388,7 @@ export default function DashboardScreen() {
         <OnboardingTooltip
           visible
           step={onboarding.step}
-          totalSteps={3}
+          totalSteps={2}
           title={currentTip.title}
           body={currentTip.body}
           targetLayout={currentTip.layout}
@@ -478,66 +401,79 @@ export default function DashboardScreen() {
   );
 }
 
-// ─── Player Pulse ────────────────────────────────────────────────────────────
+// ─── Tools Grid ──────────────────────────────────────────────────────────────
 
-// Data will be sourced from prep book completions + check-ins once wired to Firebase
-const PULSE_STATS = [
-  { value: '95%', label: 'ATTENDANCE',  trend: '+3% this week',  trendUp: true,  color: Colors.green },
-  { value: '82',  label: 'AVG PERF',   trend: '— Steady',       trendUp: null,  color: Colors.amber },
-  { value: '2',   label: 'INJURIES',   trend: '▼ Monitor',      trendUp: false, color: Colors.red   },
-  { value: '8.4', label: 'MORALE',     trend: '▲ High energy',  trendUp: true,  color: Colors.cyan  },
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+const DASH_TOOLS = [
+  { label: 'Playmaker',    sub: 'Build plays & formations',   icon: 'easel-outline'     as IoniconsName, color: Colors.cyan,   screen: 'Playmaker',        locked: false },
+  { label: 'Roster',       sub: 'Manage your players',        icon: 'people-outline'    as IoniconsName, color: Colors.blue,   screen: 'Roster',           locked: false },
+  { label: 'Stat Tracker', sub: 'Record & review team stats', icon: 'bar-chart-outline' as IoniconsName, color: Colors.green,  screen: 'StatTrackerSetup', locked: false },
+  { label: 'Prep Book',    sub: 'Game-day preparation steps', icon: 'book-outline'      as IoniconsName, color: Colors.amber,  screen: 'PrepBook',         locked: false },
+  { label: 'Highlights',   sub: 'Review & share key moments', icon: 'film-outline'      as IoniconsName, color: Colors.purple, screen: 'Highlights',       locked: false },
 ];
 
-function PlayerPulse() {
-  const { greyScale } = useCoach();
-  const ds = (color: string) => desaturate(color, greyScale);
+function ToolsGrid() {
+  const navigation = useNavigation<any>();
   return (
-    <View style={pulseStyles.section}>
-      <View style={pulseStyles.head}>
-        <Text style={pulseStyles.title}>PLAYER PULSE</Text>
-        <Text style={pulseStyles.sub}>prep book  ·  check-in</Text>
+    <View style={toolGridStyles.section}>
+      <View style={toolGridStyles.header}>
+        <Text style={toolGridStyles.headerLabel}>COACH TOOLS</Text>
       </View>
-      <View style={pulseStyles.grid}>
-        {PULSE_STATS.map((stat) => (
-          <View key={stat.label} style={pulseStyles.card}>
-            <View style={[pulseStyles.cardBar, { backgroundColor: ds(stat.color) }]} />
-            <Text style={[pulseStyles.val, { color: ds(stat.color) }]}>{stat.value}</Text>
-            <Text style={pulseStyles.label}>{stat.label}</Text>
-            <Text style={[
-              pulseStyles.trend,
-              stat.trendUp === true  && { color: ds(Colors.green) },
-              stat.trendUp === false && { color: ds(Colors.red)   },
-              stat.trendUp === null  && { color: Colors.dim        },
-            ]}>
-              {stat.trend}
+      <View style={toolGridStyles.grid}>
+        {DASH_TOOLS.map(tool => (
+          <TouchableOpacity
+            key={tool.label}
+            style={[toolGridStyles.card, tool.locked && toolGridStyles.cardLocked]}
+            activeOpacity={tool.locked ? 0.7 : 0.78}
+            onPress={() => !tool.locked && tool.screen && navigation.navigate(tool.screen)}
+            disabled={tool.locked}
+          >
+            {/* Top accent bar */}
+            <View style={[toolGridStyles.accentBar, { backgroundColor: tool.locked ? Colors.muted : tool.color }]} />
+
+            {/* Icon */}
+            <View style={[toolGridStyles.iconWrap, { backgroundColor: tool.locked ? Colors.bgDeep : `${tool.color}18` }]}>
+              <Ionicons
+                name={tool.icon}
+                size={24}
+                color={tool.locked ? Colors.muted : tool.color}
+              />
+            </View>
+
+            {/* Text */}
+            <Text style={[toolGridStyles.label, { color: tool.locked ? Colors.muted : tool.color }]}>
+              {tool.label}
             </Text>
-          </View>
+            <Text style={toolGridStyles.sub}>{tool.sub}</Text>
+
+            {/* Coming soon badge */}
+            {tool.locked && (
+              <View style={toolGridStyles.lockedBadge}>
+                <Ionicons name="lock-closed" size={8} color={Colors.muted} />
+                <Text style={toolGridStyles.lockedBadgeText}>SOON</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         ))}
       </View>
     </View>
   );
 }
 
-const pulseStyles = StyleSheet.create({
+const toolGridStyles = StyleSheet.create({
   section: { paddingHorizontal: Spacing.lg, paddingTop: 4 },
-  head: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
-  title: {
+  headerLabel: {
     fontFamily: Fonts.mono,
     fontSize: 9,
     color: Colors.dim,
     letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
-  sub: {
-    fontFamily: Fonts.mono,
-    fontSize: 8,
-    color: Colors.muted,
-    letterSpacing: 1,
   },
   grid: {
     flexDirection: 'row',
@@ -545,39 +481,58 @@ const pulseStyles = StyleSheet.create({
     gap: 8,
   },
   card: {
-    width: '47.5%',
+    width: '48%' as any,
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: Radius.lg,
-    padding: Spacing.md,
-    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    gap: 4,
     overflow: 'hidden',
+    boxShadow: 'inset 0 2px 8px rgba(0,50,150,0.08), inset 0 -1px 4px rgba(255,255,255,0.7), 0 2px 6px rgba(0,0,0,0.04)' as any,
   },
-  cardBar: {
-    position: 'absolute',
+  cardLocked: {
+    opacity: 0.6,
+    backgroundColor: Colors.bgDeep,
+  },
+  accentBar: {
+    position: 'absolute' as any,
     top: 0, left: 0, right: 0,
-    height: 2,
+    height: 3,
   },
-  val: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 28,
-    lineHeight: 34,
-    marginTop: 6,
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
   label: {
+    fontFamily: Fonts.rajdhaniBold,
+    fontSize: 17,
+    letterSpacing: 0.3,
+  },
+  sub: {
     fontFamily: Fonts.mono,
-    fontSize: 9,
+    fontSize: 8,
     color: Colors.dim,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
+    lineHeight: 12,
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     marginTop: 2,
   },
-  trend: {
+  lockedBadgeText: {
     fontFamily: Fonts.mono,
-    fontSize: 9,
-    marginTop: 4,
-    letterSpacing: 0.5,
+    fontSize: 7,
+    color: Colors.muted,
+    letterSpacing: 1,
   },
 });
 
@@ -676,13 +631,6 @@ function DayCard({
               {event.opponent}
             </Text>
           )}
-          {/* Prep bar */}
-          <View style={styles.dayPrepBar}>
-            <View style={[styles.dayPrepFill, {
-              width: `${event!.prepPct}%` as any,
-              backgroundColor: color,
-            }]} />
-          </View>
         </>
       ) : (
         <Text style={styles.dayCardPlus}>+</Text>
@@ -702,25 +650,11 @@ function EventPreviewSheet({
   visible: boolean;
   onClose: () => void;
 }) {
-  const navigation = useNavigation<any>();
   const { greyScale } = useCoach();
   const ds = (color: string) => desaturate(color, greyScale);
   if (!event) return null;
   const rawColor = TYPE_COLOR[event.type];
   const color = ds(rawColor);
-
-  const handleStartPrep = () => {
-    onClose();
-    setTimeout(() => {
-      navigation.navigate('PrepBook', {
-        eventTitle: event.title,
-        eventType: event.type,
-      });
-    }, 300); // let sheet close before navigating
-  };
-  const prepColor = event.prepPct >= 80 ? ds(Colors.green)
-    : event.prepPct >= 40 ? ds(Colors.amber)
-    : ds(Colors.red);
 
   return (
     <Modal
@@ -730,11 +664,8 @@ function EventPreviewSheet({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <TouchableOpacity
-        style={styles.sheetOverlay}
-        activeOpacity={1}
-        onPress={onClose}
-      />
+      <View style={{ flex: 1, justifyContent: 'flex-end', alignItems: 'center' }}>
+        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
       <View style={styles.sheet}>
         {/* Top accent */}
         <View style={[styles.sheetAccent, { backgroundColor: color }]} />
@@ -771,45 +702,15 @@ function EventPreviewSheet({
             )}
           </View>
 
-          {/* Prep score */}
-          <View style={styles.prepPill}>
-            <View>
-              <Text style={[styles.prepPillPct,
-                { color: event.prepPct > 0 ? prepColor : Colors.muted }]}>
-                {event.prepPct}%
-              </Text>
-              <Text style={styles.prepPillLabel}>PREP SCORE</Text>
-            </View>
-            <Text style={[styles.prepPillStatus,
-              { color: event.prepPct > 0 ? prepColor : Colors.muted }]}>
-              {event.prepPct === 0 ? 'Not started'
-                : event.prepPct < 50 ? 'In progress'
-                : event.prepPct < 100 ? 'Almost ready'
-                : 'Ready!'}
-            </Text>
-          </View>
         </View>
 
         {/* Buttons */}
         <View style={styles.sheetBtns}>
-          <TouchableOpacity
-            style={[styles.sheetBtnPrimary, { backgroundColor: color }]}
-            onPress={handleStartPrep}
-          >
-            <Text style={styles.sheetBtnPrimaryText}>⚡ START PREP</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.sheetBtnSecondary}
-            onPress={onClose}
-          >
-            <Text style={styles.sheetBtnSecondaryText}>SEE FULL EVENT ↓</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity onPress={onClose} style={styles.sheetBtnClose}>
             <Text style={styles.sheetBtnCloseText}>CLOSE</Text>
           </TouchableOpacity>
         </View>
+      </View>
       </View>
     </Modal>
   );
@@ -818,7 +719,13 @@ function EventPreviewSheet({
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+    // Web: subtle dot-grid texture
+    backgroundImage: 'radial-gradient(rgba(37,99,235,0.13) 1.5px, transparent 1.5px)' as any,
+    backgroundSize: '22px 22px' as any,
+  },
   scroll: { flex: 1 },
 
   // Header
@@ -830,13 +737,13 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border2,
-    backgroundColor: 'rgba(5,10,22,0.98)',
+    backgroundColor: Colors.bg,
   },
   logo: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 15,
-    color: Colors.text,
-    letterSpacing: 3,
+    fontFamily: Fonts.rajdhaniBold,
+    fontSize: 18,
+    color: Colors.blue,
+    letterSpacing: 1,
   },
   headerPills: { flexDirection: 'row', gap: 6 },
   pill: {
@@ -858,60 +765,75 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Greyscale slider
-  greySliderWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-  },
-  greySliderIcon: {
-    fontSize: 13,
-    color: Colors.muted,
-  },
-  greyTrack: {
-    width: GREY_SLIDER_W,
-    height: 3,
-    backgroundColor: Colors.border,
-    borderRadius: 2,
-    position: 'relative',
-  },
-  greyThumb: {
-    position: 'absolute',
-    top: -7,
-    width: 17,
-    height: 17,
-    borderRadius: 9,
-    backgroundColor: Colors.text,
-    borderWidth: 2,
-    borderColor: Colors.cyan,
-  },
-
   // Hero
   hero: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xl,
-    paddingBottom: 48,
-    minHeight: 200,
-    backgroundColor: '#000',
+    paddingBottom: 60,
+    minHeight: 220,
+    gap: Spacing.xl,
+    borderRadius: 28,
+    borderBottomLeftRadius: 72,
+    borderBottomRightRadius: 72,
+    boxShadow: '0 16px 48px rgba(21,101,192,0.45), 0 4px 16px rgba(0,0,0,0.22)' as any,
   },
-  heroLeft: { flex: 1 },
+  heroLeft: {},
+  heroRight: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    width: 120,
+  },
+  avatarWrap: {
+    position: 'relative',
+    width: 100,
+    height: 100,
+  },
+  avatarCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+  },
+  badgeOverlay: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#1565c0',
+  },
   heroTag: {
     fontFamily: Fonts.mono,
     fontSize: 9,
-    color: Colors.dim,
+    color: HeroText.secondary,
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: 4,
   },
   heroName: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 24,
-    color: Colors.text,
-    lineHeight: 28,
+    fontFamily: Fonts.rajdhaniBold,
+    fontSize: 32,
+    color: HeroText.primary,
+    lineHeight: 34,
     marginBottom: 8,
   },
   heroTier: {
@@ -936,11 +858,11 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border2,
-    backgroundColor: 'rgba(0,212,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  teamCodeLabel: { fontFamily: Fonts.mono, fontSize: 7, color: Colors.dim, letterSpacing: 1 },
-  teamCodeVal:   { fontFamily: Fonts.orbitron, fontSize: 10, color: Colors.cyan, letterSpacing: 1.5 },
+  teamCodeLabel: { fontFamily: Fonts.mono, fontSize: 7, color: HeroText.muted, letterSpacing: 1 },
+  teamCodeVal:   { fontFamily: Fonts.monoBold, fontSize: 10, color: HeroText.primary, letterSpacing: 1.5 },
   sportBadge: {
     marginTop: 6,
     alignSelf: 'flex-start',
@@ -948,26 +870,27 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   sportBadgeText: {
     fontFamily: Fonts.mono,
     fontSize: 9,
-    color: Colors.dim,
+    color: HeroText.secondary,
     letterSpacing: 1,
   },
   // Next Event Card
   nextEventCard: {
-    marginHorizontal: 36,
+    marginHorizontal: Spacing.lg,
     marginTop: 20,
     marginBottom: 8,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
-    backgroundColor: 'rgba(15,35,90,0.95)',
+    backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border2,
     overflow: 'hidden',
+    boxShadow: 'inset 0 2px 8px rgba(0,50,150,0.1), inset 0 -1px 4px rgba(255,255,255,0.7), 0 2px 8px rgba(0,0,0,0.06)' as any,
   },
   necAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, opacity: 0.9 },
   necTag: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
@@ -1038,21 +961,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
-  addEventBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border2,
-    backgroundColor: 'rgba(0,212,255,0.05)',
-  },
-  addEventText: {
-    fontFamily: Fonts.mono,
-    fontSize: 9,
-    color: Colors.cyan,
-    letterSpacing: 1,
-  },
-
   // Expand toggle
   expandRow: {
     marginHorizontal: Spacing.lg,
@@ -1102,6 +1010,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     alignItems: 'center',
     overflow: 'hidden',
+    boxShadow: 'inset 0 2px 6px rgba(0,50,150,0.08), inset 0 -1px 3px rgba(255,255,255,0.6)' as any,
   },
   dayCardEmpty: { opacity: 0.35 },
   dayCardToday: { borderColor: 'rgba(0,212,255,0.5)' },
@@ -1160,15 +1069,10 @@ const styles = StyleSheet.create({
   dimText: { opacity: 0.4 },
 
   // Sheet
-  sheetOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-  },
   sheet: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    backgroundColor: '#080f22',
+    width: '100%',
+    maxWidth: 600,
+    backgroundColor: Colors.card,
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
     borderWidth: 1,
@@ -1195,10 +1099,10 @@ const styles = StyleSheet.create({
   },
   sheetBadgeText: { fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, fontWeight: '600' },
   sheetTitle: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 24,
+    fontFamily: Fonts.rajdhaniBold,
+    fontSize: 26,
     color: Colors.text,
-    lineHeight: 28,
+    lineHeight: 30,
     marginBottom: 4,
   },
   sheetOpponent: { fontSize: 14, fontFamily: Fonts.rajdhani, fontWeight: '700', marginBottom: 8 },
@@ -1209,7 +1113,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 12,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: Colors.bgDeep,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 10,
@@ -1232,10 +1136,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sheetBtnPrimaryText: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 13,
-    color: '#000',
-    letterSpacing: 1.5,
+    fontFamily: Fonts.rajdhaniBold,
+    fontSize: 15,
+    color: '#fff',
+    letterSpacing: 1,
   },
   sheetBtnSecondary: {
     width: '100%',
@@ -1244,13 +1148,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border2,
     alignItems: 'center',
-    backgroundColor: 'rgba(61,143,255,0.06)',
+    backgroundColor: Colors.bgDeep,
   },
   sheetBtnSecondaryText: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 12,
-    color: Colors.text,
-    letterSpacing: 1,
+    fontFamily: Fonts.rajdhaniBold,
+    fontSize: 14,
+    color: Colors.blue,
+    letterSpacing: 0.5,
   },
   sheetBtnClose: { alignItems: 'center', padding: 8 },
   sheetBtnCloseText: {
@@ -1268,5 +1172,77 @@ const styles = StyleSheet.create({
   exitBtnText: {
     fontSize: 15,
     color: Colors.muted,
+  },
+
+  // Badge detail full-screen overlay
+  badgeOverlayFull: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 300,
+  },
+  badgeBackdrop: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  badgeModal: {
+    backgroundColor: Colors.card,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    padding: Spacing.xxl,
+    alignItems: 'center',
+    gap: Spacing.md,
+    width: 260,
+  },
+  badgeModalIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
+  badgeModalName: {
+    fontFamily: Fonts.orbitron,
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+  badgeModalDesc: {
+    fontFamily: Fonts.rajdhani,
+    fontSize: 15,
+    color: Colors.dim,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  badgeCatPill: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  badgeCatText: {
+    fontFamily: Fonts.mono,
+    fontSize: 9,
+    letterSpacing: 1.5,
+  },
+  badgeCloseBtn: {
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+  },
+  badgeCloseBtnText: {
+    fontFamily: Fonts.mono,
+    fontSize: 10,
+    color: Colors.dim,
+    letterSpacing: 1.5,
   },
 });

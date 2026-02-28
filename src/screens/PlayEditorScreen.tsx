@@ -22,7 +22,7 @@ import { Colors, Fonts, Radius, Spacing } from '../theme';
 
 export type Sport    = 'soccer' | 'basketball' | 'football' | 'baseball' | 'volleyball';
 export type PlayCat  = 'offense' | 'defense' | 'set-piece' | 'special';
-type Tool            = 'offense' | 'defense' | 'ball' | 'draw' | 'erase';
+type Tool            = 'offense' | 'defense' | 'ball' | 'draw' | 'arrow' | 'erase';
 type DefenseShape    = 'x' | 'triangle' | 'square' | 'diamond';
 type Point           = { x: number; y: number }; // normalized 0–1
 
@@ -39,6 +39,7 @@ export interface PlayRoute {
   id: string;
   points: Point[];
   color: string;
+  arrow?: boolean;
 }
 
 export interface Play {
@@ -76,10 +77,11 @@ const CATEGORIES: { id: PlayCat; label: string }[] = [
 ];
 
 const TOOLS: { id: Tool; icon: string; label: string }[] = [
-  { id: 'offense', icon: '●', label: 'OFF'  },
-  { id: 'defense', icon: '✕', label: 'DEF'  },
-  { id: 'draw',    icon: '✏', label: 'DRAW' },
-  { id: 'erase',   icon: '⌫', label: 'ERSR' },
+  { id: 'offense', icon: '●', label: 'OFF'   },
+  { id: 'defense', icon: '✕', label: 'DEF'   },
+  { id: 'draw',    icon: '✏', label: 'DRAW'  },
+  { id: 'arrow',   icon: '↗', label: 'ARROW' },
+  { id: 'erase',   icon: '⌫', label: 'ERSR'  },
 ];
 
 const DEFENSE_SHAPES: { id: DefenseShape; icon: string }[] = [
@@ -234,26 +236,37 @@ export function VolleyballCourt({ w, h, dim = false }: { w: number; h: number; d
   );
 }
 
-function DefaultField({ w, h }: { w: number; h: number }) {
+function GenericGrid({ w, h }: { w: number; h: number }) {
+  const step = 40;
+  const cols = Math.ceil(w / step);
+  const rows = Math.ceil(h / step);
   return (
     <>
-      <Rect x={0} y={0} width={w} height={h} fill="#1a3a2a" rx={6} />
-      <Rect x={3} y={3} width={w - 6} height={h - 6} stroke="rgba(255,255,255,0.22)" strokeWidth={1.5} fill="none" rx={4} />
-      <Line x1={3} y1={h / 2} x2={w - 3} y2={h / 2} stroke="rgba(255,255,255,0.22)" strokeWidth={1.5} />
+      {/* Base fill */}
+      <Rect x={0} y={0} width={w} height={h} fill="#2e2e2e" rx={8} />
+      {/* Vertical grid lines */}
+      {Array.from({ length: cols + 1 }, (_, i) => (
+        <Line key={`v${i}`} x1={i * step} y1={0} x2={i * step} y2={h}
+          stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
+      ))}
+      {/* Horizontal grid lines */}
+      {Array.from({ length: rows + 1 }, (_, i) => (
+        <Line key={`h${i}`} x1={0} y1={i * step} x2={w} y2={i * step}
+          stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
+      ))}
+      {/* Centre line */}
+      <Line x1={0} y1={h / 2} x2={w} y2={h / 2}
+        stroke="rgba(255,255,255,0.18)" strokeWidth={1.5} strokeDasharray="6,6" />
+      {/* Border */}
+      <Rect x={1} y={1} width={w - 2} height={h - 2}
+        stroke="rgba(255,255,255,0.2)" strokeWidth={1.5} fill="none" rx={7} />
     </>
   );
 }
 
 export function FieldBackground({ sport, w, h, dim = false }: { sport: Sport; w: number; h: number; dim?: boolean }) {
   if (!w || !h) return null;
-  switch (sport) {
-    case 'soccer':     return <SoccerField w={w} h={h} dim={dim} />;
-    case 'basketball': return <BasketballCourt w={w} h={h} dim={dim} />;
-    case 'football':   return <FootballField w={w} h={h} dim={dim} />;
-    case 'baseball':   return <BaseballField w={w} h={h} dim={dim} />;
-    case 'volleyball': return <VolleyballCourt w={w} h={h} dim={dim} />;
-    default:           return <DefaultField w={w} h={h} />;
-  }
+  return <GenericGrid w={w} h={h} />;
 }
 
 // ─── Defense token shapes ─────────────────────────────────────────────────────
@@ -342,7 +355,7 @@ export default function PlayEditorScreen({ navigation, route }: any) {
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => !viewOnly,
-    onMoveShouldSetPanResponder:  () => !viewOnly && toolRef.current === 'draw',
+    onMoveShouldSetPanResponder:  () => !viewOnly && (toolRef.current === 'draw' || toolRef.current === 'arrow'),
 
     onPanResponderGrant: (evt) => {
       const { locationX: lx, locationY: ly } = evt.nativeEvent;
@@ -371,7 +384,7 @@ export default function PlayEditorScreen({ navigation, route }: any) {
             : String.fromCharCode(65 + count); // A, B, C…
           return [...prev, { id: `${Date.now()}`, nx: lx / w, ny: ly / h, label, team: t, shape: t === 'defense' ? defenseShapeRef.current : undefined }];
         });
-      } else if (t === 'draw') {
+      } else if (t === 'draw' || t === 'arrow') {
         isDrawing.current = true;
         setCurrentPath([{ x: lx, y: ly }]);
       } else if (t === 'erase') {
@@ -399,7 +412,7 @@ export default function PlayEditorScreen({ navigation, route }: any) {
         return;
       }
 
-      if (toolRef.current === 'draw' && isDrawing.current) {
+      if ((toolRef.current === 'draw' || toolRef.current === 'arrow') && isDrawing.current) {
         setCurrentPath(prev => [...prev, { x: locationX, y: locationY }]);
       }
     },
@@ -409,12 +422,13 @@ export default function PlayEditorScreen({ navigation, route }: any) {
         draggingTokenId.current = null;
         return;
       }
-      if (toolRef.current === 'draw' && isDrawing.current) {
+      if ((toolRef.current === 'draw' || toolRef.current === 'arrow') && isDrawing.current) {
         const { w, h } = canvasRef.current;
+        const isArrow = toolRef.current === 'arrow';
         setCurrentPath(prev => {
           if (prev.length > 3) {
             const pts = prev.map(p => ({ x: p.x / w, y: p.y / h }));
-            setRoutes(r => [...r, { id: `${Date.now()}`, points: pts, color: Colors.cyan }]);
+            setRoutes(r => [...r, { id: `${Date.now()}`, points: pts, color: Colors.cyan, arrow: isArrow }]);
           }
           return [];
         });
@@ -466,6 +480,7 @@ export default function PlayEditorScreen({ navigation, route }: any) {
         {viewOnly && <View style={{ width: 50 }} />}
       </View>
 
+      <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%', flex: 1 }}>
       {/* Canvas */}
       <View
         style={styles.canvasWrap}
@@ -482,7 +497,7 @@ export default function PlayEditorScreen({ navigation, route }: any) {
               return (
                 <G key={r.id}>
                   <Path d={smoothPath(pts)} stroke={r.color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  {pts.length > 1 && (
+                  {pts.length > 1 && r.arrow && (
                     <Path d={arrowHead(pts)} stroke={r.color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
                   )}
                 </G>
@@ -609,6 +624,7 @@ export default function PlayEditorScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </View>
       )}
+      </View>
 
       {/* Save Modal */}
       <Modal visible={saveModal} transparent animationType="slide" onRequestClose={() => setSaveModal(false)}>

@@ -51,9 +51,6 @@ export default function CalendarScreen() {
           <Text style={styles.month}>FEBRUARY</Text>
           <Text style={styles.sub}>2026  ·  5 events this month</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn}>
-          <Text style={styles.addBtnText}>+ ADD</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Tabs */}
@@ -73,6 +70,7 @@ export default function CalendarScreen() {
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%' }}>
 
         {/* Feb group */}
         <View style={styles.monthGroup}>
@@ -94,12 +92,8 @@ export default function CalendarScreen() {
           ))}
         </View>
 
-        {/* Add event button */}
-        <TouchableOpacity style={styles.addEventBtn}>
-          <Text style={styles.addEventText}>+ SCHEDULE EVENT</Text>
-        </TouchableOpacity>
-
         <View style={{ height: 24 }} />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -175,21 +169,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.dim,
     marginTop: 2,
-  },
-  addBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.cyan,
-    backgroundColor: 'rgba(0,212,255,0.07)',
-  },
-  addBtnText: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.cyan,
-    letterSpacing: 1,
   },
 
   // Tabs
@@ -335,25 +314,5 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.orbitron,
     fontSize: 10,
     fontWeight: '700',
-  },
-
-  // Add event
-  addEventBtn: {
-    marginHorizontal: Spacing.lg,
-    marginTop: 10,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: Colors.border2,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    backgroundColor: 'rgba(61,143,255,0.03)',
-  },
-  addEventText: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.blue,
-    letterSpacing: 1.5,
   },
 });

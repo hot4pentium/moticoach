@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -61,10 +61,11 @@ export default function StatTrackerLiveScreen() {
     playerName: string | null; playerId: string | null;
     scoreValue?: number;
   } | null>(null);
-  const [clockSeconds,  setClockSeconds]  = useState(0);
-  const [clockRunning,  setClockRunning]  = useState(false);
-  const [editingClock,  setEditingClock]  = useState(false);
-  const [clockInput,    setClockInput]    = useState('');
+  const [clockSeconds,    setClockSeconds]    = useState(0);
+  const [clockRunning,    setClockRunning]    = useState(false);
+  const [editingClock,    setEditingClock]    = useState(false);
+  const [clockInput,      setClockInput]      = useState('');
+  const [confirmEndVisible, setConfirmEndVisible] = useState(false);
 
   const trackTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const undoTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -236,17 +237,18 @@ export default function StatTrackerLiveScreen() {
   const handleAddOT = () => { setIsOT(true); setSelectedStat(null); };
 
   const handleEndGame = () => {
-    Alert.alert('End Game?', 'View final stats summary?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'End Game', style: 'destructive',
-        onPress: () => navigation.navigate('StatTrackerSummary', {
-          config, homeScore, oppScore, teamStats,
-          playerStats: [...inGame, ...bench],
-          isOT,
-        }),
-      },
-    ]);
+    setClockRunning(false);
+    setPaused(true);
+    setConfirmEndVisible(true);
+  };
+
+  const confirmEndGame = () => {
+    setConfirmEndVisible(false);
+    navigation.navigate('StatTrackerSummary', {
+      config, homeScore, oppScore, teamStats,
+      playerStats: [...inGame, ...bench],
+      isOT,
+    });
   };
 
   return (
@@ -346,7 +348,8 @@ export default function StatTrackerLiveScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ── Split layout: stats left, players right ── */}
+      {/* ── Stat grid + optional player column ── */}
+      <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%', flex: 1 }}>
       <View style={styles.split}>
         {paused && (
           <TouchableOpacity style={styles.pauseOverlay} onPress={handlePause} activeOpacity={0.9}>
@@ -356,8 +359,11 @@ export default function StatTrackerLiveScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Left column — stat list */}
-        <ScrollView style={styles.statCol} showsVerticalScrollIndicator={false}>
+        {/* Stat grid — full width in team mode, left column in individual */}
+        <ScrollView
+          style={config.trackingMode === 'team' ? { flex: 1 } : styles.statCol}
+          showsVerticalScrollIndicator={false}
+        >
           {isBaseball && (
             <View style={[styles.statListHeader, isMyTeamBatting ? styles.statListHeaderBat : styles.statListHeaderField]}>
               <Text style={[styles.statListHeaderText, isMyTeamBatting ? styles.statListHeaderTextBat : styles.statListHeaderTextField]}>
@@ -365,79 +371,72 @@ export default function StatTrackerLiveScreen() {
               </Text>
             </View>
           )}
-          {activeStats.map(stat => (
-            <TouchableOpacity
-              key={stat.key}
-              style={[styles.statRow, selectedStat?.key === stat.key && styles.statRowSelected]}
-              onPress={() => handleStatTap(stat)}
-              activeOpacity={0.7}
-            >
-              <View style={[
-                styles.statRowAccent,
-                selectedStat?.key === stat.key && styles.statRowAccentActive,
-              ]} />
-              <View style={styles.statRowBody}>
-                <Text style={[
-                  styles.statRowLabel,
-                  selectedStat?.key === stat.key && { color: Colors.cyan },
-                ]}>
-                  {stat.label}
-                </Text>
-                <Text style={[
-                  styles.statRowSub,
-                  stat.scoreValue ? styles.statRowSubScore : null,
-                ]}>
-                  {stat.sub}
-                </Text>
-              </View>
-              {(teamStats[stat.key] ?? 0) > 0 && (
-                <View style={styles.statRowBadge}>
-                  <Text style={styles.statRowBadgeText}>{teamStats[stat.key]}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
+          <View style={styles.statGrid}>
+            {activeStats.map(stat => {
+              const count = teamStats[stat.key] ?? 0;
+              const isSelected = selectedStat?.key === stat.key;
+              return (
+                <TouchableOpacity
+                  key={stat.key}
+                  style={styles.statTileWrap}
+                  onPress={() => handleStatTap(stat)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.statTile, isSelected && styles.statTileSelected]}>
+                    {count > 0 && (
+                      <View style={styles.statTileBadge}>
+                        <Text style={styles.statTileBadgeText}>{count}</Text>
+                      </View>
+                    )}
+                    <Text style={[styles.statTileLabel, isSelected && { color: Colors.cyan }]}>
+                      {stat.label}
+                    </Text>
+                    <Text style={[styles.statTileSub, stat.scoreValue ? styles.statTileSubScore : null]}>
+                      {stat.sub}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </ScrollView>
 
-        {/* Divider */}
-        <View style={styles.splitDivider} />
-
-        {/* Right column — player sections */}
-        {config.trackingMode === 'individual' ? (
-          <ScrollView style={styles.playerCol} showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 32 }}>
-            <PlayerSection
-              label="IN GAME"
-              count={inGame.length}
-              players={inGame}
-              selectedStat={selectedStat}
-              focused={!!selectedStat}
-              recentlyTracked={recentlyTracked}
-              onPlayerTap={handlePlayerSelect}
-              onMovePlayer={moveToBench}
-              moveIconName="arrow-down-circle-outline"
-              moveColor={Colors.muted}
-              emptyText="No players in game"
-            />
-            <PlayerSection
-              label="BENCH"
-              count={bench.length}
-              players={bench}
-              selectedStat={selectedStat}
-              focused={false}
-              recentlyTracked={recentlyTracked}
-              onPlayerTap={undefined}
-              onMovePlayer={moveToGame}
-              moveIconName="arrow-up-circle-outline"
-              moveColor={Colors.green}
-              emptyText="Bench is empty"
-            />
-          </ScrollView>
-        ) : (
-          <View style={[styles.playerCol, styles.teamModeCol]}>
-            <Text style={styles.teamModeText}>Team mode{'\n'}stats only</Text>
-          </View>
+        {/* Player column — individual mode only */}
+        {config.trackingMode === 'individual' && (
+          <>
+            <View style={styles.splitDivider} />
+            <ScrollView style={styles.playerCol} showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 32 }}>
+              <PlayerSection
+                label="IN GAME"
+                count={inGame.length}
+                players={inGame}
+                selectedStat={selectedStat}
+                focused={!!selectedStat}
+                recentlyTracked={recentlyTracked}
+                onPlayerTap={handlePlayerSelect}
+                onMovePlayer={moveToBench}
+                moveIconName="arrow-down-circle-outline"
+                moveColor={Colors.muted}
+                emptyText="No players in game"
+              />
+              <PlayerSection
+                label="BENCH"
+                count={bench.length}
+                players={bench}
+                selectedStat={selectedStat}
+                focused={false}
+                recentlyTracked={recentlyTracked}
+                onPlayerTap={undefined}
+                onMovePlayer={moveToGame}
+                moveIconName="arrow-up-circle-outline"
+                moveColor={Colors.green}
+                emptyText="Bench is empty"
+              />
+            </ScrollView>
+          </>
         )}
+      </View>
       </View>
 
       {/* Clock bar — hidden for baseball (innings-based, no game clock) */}
@@ -484,6 +483,67 @@ export default function StatTrackerLiveScreen() {
           <Text style={[styles.clockStatus, clockRunning && styles.clockStatusRunning]}>
             {clockRunning ? '● RUN' : '○ STOP'}
           </Text>
+        </View>
+      )}
+
+      {/* ── End Game Confirmation Overlay ── */}
+      {confirmEndVisible && (
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            {/* Header */}
+            <View style={styles.confirmHeader}>
+              <Text style={styles.confirmTitle}>END GAME?</Text>
+              <Text style={styles.confirmSub}>
+                {config.teamName.split(' ').slice(-1)[0].toUpperCase()}
+                {'  vs  '}
+                {config.opponentName.split(' ').slice(-1)[0].toUpperCase()}
+              </Text>
+            </View>
+
+            {/* Final score */}
+            <View style={styles.confirmScore}>
+              <View style={styles.confirmScoreBlock}>
+                <Text style={styles.confirmScoreName}>
+                  {config.teamName.split(' ').slice(-1)[0].toUpperCase()}
+                </Text>
+                <Text style={styles.confirmScoreNum}>{homeScore}</Text>
+              </View>
+              <Text style={styles.confirmScoreVs}>–</Text>
+              <View style={styles.confirmScoreBlock}>
+                <Text style={styles.confirmScoreName}>
+                  {config.opponentName.split(' ').slice(-1)[0].toUpperCase()}
+                </Text>
+                <Text style={styles.confirmScoreNum}>{oppScore}</Text>
+              </View>
+            </View>
+
+            {/* Stat summary */}
+            <View style={styles.confirmStatRow}>
+              {Object.entries(teamStats)
+                .filter(([, v]) => v > 0)
+                .slice(0, 4)
+                .map(([key, val]) => (
+                  <View key={key} style={styles.confirmStat}>
+                    <Text style={styles.confirmStatNum}>{val}</Text>
+                    <Text style={styles.confirmStatKey}>{key.toUpperCase()}</Text>
+                  </View>
+                ))}
+            </View>
+
+            {/* Actions */}
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmCancel}
+                onPress={() => { setConfirmEndVisible(false); setPaused(false); }}
+              >
+                <Text style={styles.confirmCancelText}>KEEP PLAYING</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmEnd} onPress={confirmEndGame}>
+                <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                <Text style={styles.confirmEndText}>END &amp; SEE STATS</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       )}
 
@@ -591,20 +651,26 @@ function ScoreBlock({ name, score, onMinus, onPlus, right }: {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+    backgroundImage: 'radial-gradient(rgba(37,99,235,0.13) 1.5px, transparent 1.5px)' as any,
+    backgroundSize: '22px 22px' as any,
+  },
 
   // Period bar
   periodBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12,
     paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border,
-    backgroundColor: 'rgba(5,10,22,0.98)',
+    backgroundColor: Colors.card,
+    boxShadow: '0 2px 8px rgba(0,30,100,0.08)' as any,
   },
   periodChip: {
     paddingHorizontal: 18, paddingVertical: 6,
     borderRadius: Radius.full, borderWidth: 1.5,
-    borderColor: Colors.border2, backgroundColor: 'rgba(61,143,255,0.1)',
+    borderColor: Colors.border2, backgroundColor: `${Colors.blue}12`,
   },
-  periodChipText: { fontFamily: Fonts.orbitron, fontSize: 13, color: Colors.text, letterSpacing: 1 },
+  periodChipText: { fontFamily: Fonts.rajdhaniBold, fontSize: 14, color: Colors.text, letterSpacing: 1 },
   liveChip:       { flexDirection: 'row', alignItems: 'center', gap: 5 },
   liveDot:        { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.green },
   liveText:       { fontFamily: Fonts.mono, fontSize: 11, color: Colors.green, letterSpacing: 1.5 },
@@ -622,46 +688,50 @@ const styles = StyleSheet.create({
   // Scoreboard
   scoreboard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
+    backgroundColor: Colors.card,
   },
   scoreBlock:      { alignItems: 'center', flex: 1 },
   scoreBlockRight: {},
   scoreName: {
     fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim,
-    letterSpacing: 1.5, marginBottom: 6, textTransform: 'uppercase',
+    letterSpacing: 1.5, marginBottom: 4, textTransform: 'uppercase',
   },
   scoreRow:    { flexDirection: 'row', alignItems: 'center', gap: 10 },
   scoreBtn: {
     width: 36, height: 36, borderRadius: Radius.sm,
     borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.card,
     alignItems: 'center', justifyContent: 'center',
+    boxShadow: 'inset 0 1px 4px rgba(0,50,150,0.1)' as any,
   },
-  scoreBtnText: { fontFamily: Fonts.orbitron, fontSize: 18, color: Colors.text },
-  scoreNum:     { fontFamily: Fonts.orbitron, fontSize: 42, color: Colors.text, lineHeight: 50, minWidth: 52, textAlign: 'center' },
-  vs:           { fontFamily: Fonts.mono, fontSize: 12, color: Colors.muted, letterSpacing: 2 },
+  scoreBtnText: { fontFamily: Fonts.rajdhaniBold, fontSize: 22, color: Colors.text },
+  scoreNum:     { fontFamily: Fonts.orbitron, fontSize: 38, color: Colors.text, lineHeight: 46, minWidth: 52, textAlign: 'center' },
+  vs:           { fontFamily: Fonts.mono, fontSize: 11, color: Colors.muted, letterSpacing: 2 },
 
   // Controls
   controls: {
     flexDirection: 'row', gap: 8,
-    paddingHorizontal: Spacing.lg, paddingVertical: 10,
+    paddingHorizontal: Spacing.lg, paddingVertical: 8,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
+    backgroundColor: Colors.card,
   },
-  ctrlBtn:         { flex: 1, paddingVertical: 10, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border2, alignItems: 'center' },
+  ctrlBtn:         { flex: 1, paddingVertical: 9, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border2, alignItems: 'center' },
   ctrlBtnDisabled: { opacity: 0.35 },
   ctrlBtnText:     { fontFamily: Fonts.mono, fontSize: 9, color: Colors.cyan, letterSpacing: 1 },
   otBtn: {
-    paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: `${Colors.amber}55`, backgroundColor: 'rgba(212,168,83,0.1)',
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: `${Colors.amber}55`, backgroundColor: `${Colors.amber}12`,
   },
-  otBtnText:  { fontFamily: Fonts.orbitron, fontSize: 10, color: Colors.amber, letterSpacing: 1 },
-  endBtn:     { paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radius.md, backgroundColor: Colors.red },
-  endBtnText: { fontFamily: Fonts.orbitron, fontSize: 10, color: '#fff', letterSpacing: 1 },
+  otBtnText:  { fontFamily: Fonts.mono, fontSize: 9, color: Colors.amber, letterSpacing: 1 },
+  endBtn:     { paddingHorizontal: 14, paddingVertical: 9, borderRadius: Radius.md, backgroundColor: Colors.red },
+  endBtnText: { fontFamily: Fonts.mono, fontSize: 9, color: '#fff', letterSpacing: 1 },
 
   // Instruction
   instruction: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: Spacing.lg, paddingVertical: 10,
+    paddingHorizontal: Spacing.lg, paddingVertical: 8,
+    backgroundColor: Colors.bg,
   },
   instrDot:      { width: 8, height: 8, borderRadius: 4, borderWidth: 2, borderColor: Colors.cyan },
   instrText:     { flex: 1, fontFamily: Fonts.mono, fontSize: 10, color: Colors.dim, letterSpacing: 1.5 },
@@ -673,42 +743,72 @@ const styles = StyleSheet.create({
   statCol:      { flex: 5 },
   splitDivider: { width: 1, backgroundColor: Colors.border },
   playerCol:    { flex: 6 },
-  teamModeCol:  { alignItems: 'center', justifyContent: 'center' },
-  teamModeText: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.muted, textAlign: 'center', letterSpacing: 1, lineHeight: 16 },
 
   // Stat list header (baseball batting/pitching mode indicator)
   statListHeader:          { paddingVertical: 8, paddingHorizontal: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  statListHeaderBat:       { backgroundColor: 'rgba(212,168,83,0.07)' },
-  statListHeaderField:     { backgroundColor: 'rgba(0,212,255,0.05)' },
+  statListHeaderBat:       { backgroundColor: `${Colors.amber}0d` },
+  statListHeaderField:     { backgroundColor: `${Colors.cyan}0a` },
   statListHeaderText:      { fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, textAlign: 'center' },
   statListHeaderTextBat:   { color: Colors.amber },
   statListHeaderTextField: { color: Colors.cyan },
 
-  // Stat rows (left column)
-  statRow: {
+  // Stat grid (3-column tile layout)
+  statGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Spacing.sm,
+    paddingTop: Spacing.sm,
+  },
+  statTileWrap: {
+    width: '33.33%',
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+  },
+  statTile: {
     alignItems: 'center',
-    paddingVertical: 13,
-    paddingRight: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    gap: 3,
+    position: 'relative',
+    boxShadow: 'inset 0 2px 6px rgba(0,50,150,0.08), inset 0 -1px 3px rgba(255,255,255,0.7), 0 1px 4px rgba(0,0,0,0.05)' as any,
   },
-  statRowSelected:     { backgroundColor: 'rgba(0,212,255,0.07)' },
-  statRowAccent:       { width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: 'transparent' },
-  statRowAccentActive: { backgroundColor: Colors.cyan },
-  statRowBody:         { flex: 1 },
-  statRowLabel:        { fontFamily: Fonts.orbitron, fontSize: 14, color: Colors.text, letterSpacing: 0.5, textAlign: 'center' },
-  statRowSub:          { fontFamily: Fonts.mono, fontSize: 8, color: Colors.dim, letterSpacing: 0.3, marginTop: 2, textAlign: 'center' },
-  statRowSubScore:     { color: Colors.green },
-  statRowBadge: {
-    paddingHorizontal: 6, paddingVertical: 2,
+  statTileSelected: {
+    borderColor: Colors.cyan,
+    backgroundColor: `${Colors.cyan}0d`,
+    boxShadow: `inset 0 2px 6px ${Colors.cyan}18, 0 0 0 1px ${Colors.cyan}44` as any,
+  },
+  statTileLabel: {
+    fontFamily: Fonts.rajdhaniBold,
+    fontSize: 22,
+    color: Colors.text,
+    letterSpacing: 0.5,
+    lineHeight: 26,
+  },
+  statTileSub: {
+    fontFamily: Fonts.mono,
+    fontSize: 7,
+    color: Colors.dim,
+    letterSpacing: 0.2,
+    textAlign: 'center',
+  },
+  statTileSubScore: { color: Colors.green },
+  statTileBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 20,
+    height: 20,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,212,255,0.15)',
-    borderWidth: 1, borderColor: `${Colors.cyan}44`,
-    marginRight: 4,
+    backgroundColor: Colors.cyan,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
-  statRowBadgeText: { fontFamily: Fonts.orbitron, fontSize: 9, color: Colors.cyan },
+  statTileBadgeText: { fontFamily: Fonts.monoBold, fontSize: 10, color: '#fff' },
 
   // Player sections (right column)
   section: {
@@ -805,14 +905,14 @@ const styles = StyleSheet.create({
   // Undo snackbar
   undoBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg, paddingVertical: 8,
-    backgroundColor: 'rgba(0,212,255,0.07)',
+    paddingHorizontal: Spacing.lg, paddingVertical: 7,
+    backgroundColor: `${Colors.cyan}0d`,
     borderBottomWidth: 1, borderBottomColor: `${Colors.cyan}33`,
   },
   undoBarHidden: { opacity: 0 },
   undoBarText: { flex: 1, fontFamily: Fonts.mono, fontSize: 10, color: Colors.text, letterSpacing: 0.5 },
-  undoBtn:     { paddingHorizontal: 12, paddingVertical: 5, borderRadius: Radius.sm, borderWidth: 1, borderColor: `${Colors.cyan}55`, backgroundColor: 'rgba(0,212,255,0.15)' },
-  undoBtnText: { fontFamily: Fonts.orbitron, fontSize: 9, color: Colors.cyan, letterSpacing: 1 },
+  undoBtn:     { paddingHorizontal: 12, paddingVertical: 4, borderRadius: Radius.sm, borderWidth: 1, borderColor: `${Colors.cyan}55`, backgroundColor: `${Colors.cyan}18` },
+  undoBtnText: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.cyan, letterSpacing: 1 },
 
   // Clock bar
   clockBar: {
@@ -843,4 +943,66 @@ const styles = StyleSheet.create({
   clockEditCancel:    { padding: 6 },
   clockStatus:        { fontFamily: Fonts.mono, fontSize: 8, color: Colors.muted, letterSpacing: 1, textAlign: 'right' },
   clockStatusRunning: { color: Colors.green },
+
+  // End Game confirmation overlay
+  confirmOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 20, backgroundColor: 'rgba(10,22,40,0.72)',
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  confirmCard: {
+    width: '100%', maxWidth: 420,
+    backgroundColor: Colors.card,
+    borderRadius: Radius.xl,
+    borderWidth: 1, borderColor: Colors.border2,
+    overflow: 'hidden',
+    boxShadow: '0 24px 60px rgba(0,0,0,0.35), 0 8px 24px rgba(0,30,100,0.2)' as any,
+  },
+  confirmHeader: {
+    paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl, paddingBottom: Spacing.md,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    alignItems: 'center',
+  },
+  confirmTitle: {
+    fontFamily: Fonts.rajdhaniBold, fontSize: 22, color: Colors.text,
+    letterSpacing: 3, marginBottom: 2,
+  },
+  confirmSub: {
+    fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, letterSpacing: 1.5,
+  },
+  confirmScore: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: Spacing.xl, gap: Spacing.xl,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    backgroundColor: Colors.bg,
+  },
+  confirmScoreBlock: { alignItems: 'center', minWidth: 80 },
+  confirmScoreName:  { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, letterSpacing: 1.5, marginBottom: 4 },
+  confirmScoreNum:   { fontFamily: Fonts.orbitron, fontSize: 52, color: Colors.text, lineHeight: 60 },
+  confirmScoreVs:    { fontFamily: Fonts.mono, fontSize: 18, color: Colors.muted },
+  confirmStatRow: {
+    flexDirection: 'row', justifyContent: 'center', gap: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    backgroundColor: Colors.bg,
+  },
+  confirmStat:    { alignItems: 'center', minWidth: 48 },
+  confirmStatNum: { fontFamily: Fonts.rajdhaniBold, fontSize: 20, color: Colors.cyan },
+  confirmStatKey: { fontFamily: Fonts.mono, fontSize: 7, color: Colors.dim, letterSpacing: 1, marginTop: 1 },
+  confirmActions: {
+    flexDirection: 'row', gap: Spacing.sm,
+    padding: Spacing.lg,
+  },
+  confirmCancel: {
+    flex: 1, paddingVertical: 14, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border, alignItems: 'center',
+  },
+  confirmCancelText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.dim, letterSpacing: 1 },
+  confirmEnd: {
+    flex: 2, paddingVertical: 14, borderRadius: Radius.lg,
+    backgroundColor: Colors.red, alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row', gap: 6,
+  },
+  confirmEndText: { fontFamily: Fonts.rajdhaniBold, fontSize: 15, color: '#fff', letterSpacing: 1 },
 });

@@ -13,6 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { clearBadge } from '../lib/notifications';
 import {
   collection,
   query,
@@ -62,6 +63,9 @@ export default function DMConversationScreen() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [text,     setText]     = useState('');
+
+  // Clear app badge when conversation is opened
+  useEffect(() => { clearBadge(); }, []);
 
   // ─── Subscribe to messages ──────────────────────────────────────────────────
   useEffect(() => {

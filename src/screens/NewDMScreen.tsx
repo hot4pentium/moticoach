@@ -119,6 +119,7 @@ export default function NewDMScreen() {
         <View style={{ width: 32 }} />
       </View>
 
+      <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%', flex: 1 }}>
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={Colors.cyan} />
@@ -165,6 +166,7 @@ export default function NewDMScreen() {
           }}
         />
       )}
+      </View>
     </SafeAreaView>
   );
 }

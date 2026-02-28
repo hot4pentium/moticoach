@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -16,9 +17,11 @@ import {
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { Colors, Fonts, Radius, Spacing } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Colors, Fonts, Gradients, Radius, Spacing } from '../theme';
 
-export default function AuthScreen() {
+export default function AuthScreen({ onBack }: { onBack?: () => void }) {
+  const { width } = useWindowDimensions();
   const [mode,     setMode]     = useState<'login' | 'signup'>('login');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -55,6 +58,7 @@ export default function AuthScreen() {
   };
 
   return (
+    <LinearGradient colors={Gradients.auth} style={{ flex: 1 }}>
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.kav}
@@ -65,10 +69,17 @@ export default function AuthScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View style={{ width: '100%', maxWidth: 480, alignSelf: 'center' }}>
+          {/* Back to landing */}
+          {onBack && (
+            <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+              <Text style={styles.backBtnTxt}>← Back</Text>
+            </TouchableOpacity>
+          )}
           {/* Brand */}
           <View style={styles.brand}>
             <Text style={styles.logo}>
-              MOTI<Text style={{ color: Colors.cyan }}>coach</Text>
+              League<Text style={{ color: Colors.cyan }}>Matrix</Text>
             </Text>
             <Text style={styles.tagline}>Train smarter. Win together.</Text>
           </View>
@@ -140,15 +151,19 @@ export default function AuthScreen() {
               {isLogin ? 'Sign up' : 'Log in'}
             </Text>
           </Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  container: { flex: 1, backgroundColor: 'transparent' },
   kav:       { flex: 1 },
+  backBtn:   { paddingTop: Spacing.md, paddingBottom: Spacing.sm },
+  backBtnTxt:{ fontFamily: Fonts.rajdhani, fontSize: 15, color: Colors.dim },
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -158,25 +173,25 @@ const styles = StyleSheet.create({
 
   brand: { alignItems: 'center', marginBottom: 40 },
   logo: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 32,
-    color: Colors.text,
-    letterSpacing: 4,
+    fontFamily: Fonts.rajdhaniBold,
+    fontSize: 40,
+    color: '#ffffff',
+    letterSpacing: 2,
     marginBottom: 6,
   },
   tagline: {
     fontFamily: Fonts.rajdhani,
     fontSize: 14,
-    color: Colors.dim,
+    color: 'rgba(255,255,255,0.7)',
     letterSpacing: 1,
   },
 
   modeRow: {
     flexDirection: 'row',
-    backgroundColor: Colors.card,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(255,255,255,0.25)',
     padding: 3,
     marginBottom: 28,
   },
@@ -186,20 +201,20 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
   },
-  modeBtnActive: { backgroundColor: Colors.cyan },
+  modeBtnActive: { backgroundColor: '#ffffff' },
   modeBtnText: {
     fontFamily: Fonts.mono,
     fontSize: 11,
-    color: Colors.muted,
+    color: 'rgba(255,255,255,0.6)',
     letterSpacing: 1.5,
   },
-  modeBtnTextActive: { color: '#000' },
+  modeBtnTextActive: { color: '#1565c0' },
 
   form: { marginBottom: 24 },
   fieldLabel: {
     fontFamily: Fonts.mono,
     fontSize: 8,
-    color: Colors.dim,
+    color: 'rgba(255,255,255,0.7)',
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: 6,
@@ -208,17 +223,17 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border2,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: Spacing.md,
-    color: Colors.text,
+    color: '#ffffff',
     fontFamily: Fonts.rajdhani,
     fontSize: 16,
   },
   error: {
     fontFamily: Fonts.mono,
     fontSize: 10,
-    color: Colors.red,
+    color: '#ffcdd2',
     marginTop: 12,
     letterSpacing: 0.3,
   },
@@ -226,15 +241,15 @@ const styles = StyleSheet.create({
     marginTop: 24,
     height: 52,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.cyan,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
   },
   submitText: {
-    fontFamily: Fonts.orbitron,
-    fontSize: 13,
-    color: '#000',
-    letterSpacing: 2,
+    fontFamily: Fonts.rajdhaniBold,
+    fontSize: 16,
+    color: '#1565c0',
+    letterSpacing: 1,
   },
 
   hint: {

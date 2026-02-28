@@ -11,11 +11,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
+import { DEMO_TEAMS } from '../lib/demoData';
 
 type RoleOption = { role: UserRole; label: string; desc: string; icon: string; needsCode: boolean };
 
@@ -23,9 +24,9 @@ const ROLE_OPTIONS: RoleOption[] = [
   {
     role:      'coach',
     label:     'COACH',
-    desc:      'Create a team and run the full coaching suite — stat tracker, playmaker, prep book, roster management.',
+    desc:      'Enter the team code from your org admin to claim your team and access the full coaching suite.',
     icon:      '🏟️',
-    needsCode: false,
+    needsCode: true,
   },
   {
     role:      'supporter',
@@ -47,29 +48,57 @@ export default function RoleSelectScreen() {
   const { user, setRole, setTeamCode: setCtxTeamCode, setDisplayName: setCtxDisplayName } = useAuth();
   const [selected,  setSelected]  = useState<UserRole | null>(null);
   const [teamCode,  setTeamCode]  = useState('');
-  const [teamName,  setTeamName]  = useState('');
   const [error,     setError]     = useState('');
   const [busy,      setBusy]      = useState(false);
 
-  const option = ROLE_OPTIONS.find(o => o.role === selected);
-  const needsCode = option?.needsCode ?? false;
 
   const handleConfirm = async () => {
     if (!selected || !user) return;
-    if (needsCode && !teamCode.trim()) {
+    if (!teamCode.trim()) {
       setError('Enter your team code to continue.');
-      return;
-    }
-    if (selected === 'coach' && !teamName.trim()) {
-      setError('Enter a team name to continue.');
       return;
     }
     setError('');
     setBusy(true);
     try {
-      const code = needsCode
-        ? teamCode.trim().toUpperCase()
-        : generateCode(user.uid);
+      const code = teamCode.trim().toUpperCase();
+
+      if (selected === 'coach') {
+        const teamSnap = await getDoc(doc(db, 'teams', code));
+        if (!teamSnap.exists()) {
+          // Fallback: check if it's a pending demo team and seed it
+          const demoTeam = DEMO_TEAMS.find(t => t.code === code && t.status === 'setup');
+          if (demoTeam) {
+            await setDoc(doc(db, 'teams', code), {
+              coachUid:     user.uid,
+              teamName:     demoTeam.name,
+              sport:        demoTeam.sportId,
+              leagueId:     demoTeam.leagueId,
+              isPaid:       false,
+              status:       'active',
+              badges:       ['game_first', 'roster_full'],
+              gamesTracked: 1,
+              createdAt:    serverTimestamp(),
+            });
+          } else {
+            setError('Team code not found. Check with your org admin.');
+            setBusy(false);
+            return;
+          }
+        } else {
+          const teamData = teamSnap.data();
+          const isDemoCode = DEMO_TEAMS.some(t => t.code === code);
+          if (!isDemoCode && teamData.coachUid !== null && teamData.coachUid !== undefined) {
+            setError('A coach has already claimed this team.');
+            setBusy(false);
+            return;
+          }
+          await updateDoc(doc(db, 'teams', code), {
+            coachUid: user.uid,
+            status:   'active',
+          });
+        }
+      }
 
       await setDoc(doc(db, 'users', user.uid), {
         role:        selected,
@@ -77,16 +106,6 @@ export default function RoleSelectScreen() {
         teamCode:    code,
         createdAt:   serverTimestamp(),
       });
-
-      if (selected === 'coach') {
-        await setDoc(doc(db, 'teams', code), {
-          coachUid:  user.uid,
-          teamName:  teamName.trim(),
-          sport:     'soccer',
-          teamXp:    0,
-          createdAt: serverTimestamp(),
-        });
-      }
 
       // Clear legacy non-UID onboarding key so old dev installs don't block it
       if (typeof localStorage !== 'undefined') {
@@ -114,6 +133,7 @@ export default function RoleSelectScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%' }}>
           {/* Header */}
           <Text style={styles.heading}>WHO ARE YOU?</Text>
           <Text style={styles.sub}>Choose your role to set up your experience.</Text>
@@ -126,7 +146,7 @@ export default function RoleSelectScreen() {
                 <TouchableOpacity
                   key={opt.role}
                   style={[styles.card, active && styles.cardActive]}
-                  onPress={() => { setSelected(opt.role); setError(''); }}
+                  onPress={() => { setSelected(opt.role); setError(''); if (opt.role === 'coach') setTeamCode('GG354'); else setTeamCode(''); }}
                   activeOpacity={0.8}
                 >
                   <View style={styles.cardTop}>
@@ -146,37 +166,26 @@ export default function RoleSelectScreen() {
             })}
           </View>
 
-          {/* Conditional fields */}
-          {selected === 'coach' && (
-            <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>TEAM NAME</Text>
-              <TextInput
-                style={styles.input}
-                value={teamName}
-                onChangeText={setTeamName}
-                placeholder="e.g. Riverside Rockets"
-                placeholderTextColor={Colors.muted}
-                autoCapitalize="words"
-              />
-              <Text style={styles.fieldHint}>
-                A unique team code will be generated for you to share with players.
-              </Text>
-            </View>
-          )}
-
-          {needsCode && (
+          {/* Team code — required for all roles */}
+          {selected && (
             <View style={styles.fieldBlock}>
               <Text style={styles.fieldLabel}>TEAM CODE</Text>
               <TextInput
-                style={[styles.input, styles.codeInput]}
+                style={[styles.input, styles.codeInput, selected === 'coach' && styles.codeInputLocked]}
                 value={teamCode}
                 onChangeText={t => setTeamCode(t.toUpperCase())}
                 placeholder="e.g. RVR-2025"
                 placeholderTextColor={Colors.muted}
                 autoCapitalize="characters"
                 autoCorrect={false}
+                editable={selected !== 'coach'}
+                selectTextOnFocus={false}
               />
-              <Text style={styles.fieldHint}>Get this from your coach.</Text>
+              <Text style={styles.fieldHint}>
+                {selected === 'coach'
+                  ? '🔒 Demo code — pre-loaded for testing.'
+                  : 'Get this from your coach.'}
+              </Text>
             </View>
           )}
 
@@ -199,21 +208,13 @@ export default function RoleSelectScreen() {
           <TouchableOpacity onPress={() => signOut(auth)} style={styles.signOutBtn}>
             <Text style={styles.signOutText}>← Sign out</Text>
           </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function generateCode(uid: string): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-    if (i === 2 || i === 5) code += '-';
-  }
-  return code.slice(0, 11);
-}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
@@ -305,6 +306,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: 3,
     color: Colors.cyan,
+  },
+  codeInputLocked: {
+    opacity: 0.55,
+    borderColor: Colors.border,
+    backgroundColor: 'rgba(255,255,255,0.02)',
   },
   fieldHint: {
     fontFamily: Fonts.mono,

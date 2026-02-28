@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
 import { useCoach } from '../context/CoachContext';
 import { Sport } from './PlayEditorScreen';
+import UpgradePrompt from '../components/UpgradePrompt';
 
 // ─── Shared types (imported by Live + Summary screens) ───────────────────────
 
@@ -141,13 +142,14 @@ const GAME_OPTIONS: GameOption[] = [
 
 export default function StatTrackerSetupScreen() {
   const navigation = useNavigation<any>();
-  const { coachSport } = useCoach();
+  const { coachSport, isPaid } = useCoach();
 
   const pc = PERIOD_CONFIG[coachSport];
   const [step,           setStep]           = useState(0);
   const [selectedGame,   setSelectedGame]   = useState<GameOption>(GAME_OPTIONS[0]);
   const [totalPeriods,   setTotalPeriods]   = useState(pc.default);
-  const [trackingMode,   setTrackingMode]   = useState<'team' | 'individual'>('individual');
+  const [trackingMode,   setTrackingMode]   = useState<'team' | 'individual'>('team');
+  const [upgradeVisible, setUpgradeVisible] = useState(false);
   const [soccerStructure,setSoccerStructure]= useState<'halves' | 'quarters'>('halves');
   const [isHomeTeam,     setIsHomeTeam]     = useState(true);
 
@@ -194,6 +196,12 @@ export default function StatTrackerSetupScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <UpgradePrompt
+        visible={upgradeVisible}
+        featureName="INDIVIDUAL TRACKING"
+        description="Per-player stat attribution is available on the Pro plan."
+        onDismiss={() => setUpgradeVisible(false)}
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
@@ -215,6 +223,7 @@ export default function StatTrackerSetupScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%' }}>
 
         {/* ── Step 0: Select Game ── */}
         {step === 0 && GAME_OPTIONS.map(g => (
@@ -289,17 +298,22 @@ export default function StatTrackerSetupScreen() {
         {/* ── Step 2: Tracking Mode ── */}
         {step === 2 && (
           <View style={styles.modeRow}>
+            {/* Individual — locked for free tier */}
             <TouchableOpacity
-              style={[styles.modeCard, trackingMode === 'individual' && styles.modeCardActive]}
-              onPress={() => setTrackingMode('individual')}
+              style={[styles.modeCard, !isPaid && styles.modeCardLocked]}
+              onPress={() => isPaid ? setTrackingMode('individual') : setUpgradeVisible(true)}
+              activeOpacity={isPaid ? 0.75 : 0.9}
             >
-              <Ionicons name="person-outline" size={26}
-                color={trackingMode === 'individual' ? Colors.cyan : Colors.muted} />
-              <Text style={[styles.modeLabel, trackingMode === 'individual' && { color: Colors.cyan }]}>
-                INDIVIDUAL
-              </Text>
-              <Text style={styles.modeSub}>Stats attributed{'\n'}to each player</Text>
+              <Ionicons name="person-outline" size={26} color={Colors.muted} />
+              <Text style={[styles.modeLabel, styles.modeLabelLocked]}>INDIVIDUAL</Text>
+              <Text style={[styles.modeSub, { opacity: 0.55 }]}>Stats attributed{'\n'}to each player</Text>
+              <View style={styles.lockBadge}>
+                <Ionicons name="lock-closed" size={10} color="#fff" />
+                <Text style={styles.lockBadgeText}>PRO</Text>
+              </View>
             </TouchableOpacity>
+
+            {/* Team — base feature */}
             <TouchableOpacity
               style={[styles.modeCard, trackingMode === 'team' && styles.modeCardActive]}
               onPress={() => setTrackingMode('team')}
@@ -315,6 +329,7 @@ export default function StatTrackerSetupScreen() {
         )}
 
         <View style={{ height: 20 }} />
+        </View>
       </ScrollView>
 
       {/* Footer */}
@@ -339,17 +354,23 @@ function SectionLabel({ label, hint }: { label: string; hint?: string }) {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+    backgroundImage: 'radial-gradient(rgba(37,99,235,0.13) 1.5px, transparent 1.5px)' as any,
+    backgroundSize: '22px 22px' as any,
+  },
 
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: Spacing.lg, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: Colors.border2,
-    backgroundColor: 'rgba(5,10,22,0.98)', gap: 12,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    backgroundColor: Colors.card, gap: 12,
+    boxShadow: '0 2px 8px rgba(0,30,100,0.08)' as any,
   },
   backBtn:  { paddingVertical: 6, paddingRight: 4 },
   backText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.cyan, letterSpacing: 1 },
-  title:    { fontFamily: Fonts.orbitron, fontSize: 16, color: Colors.text, letterSpacing: 2 },
+  title:    { fontFamily: Fonts.rajdhaniBold, fontSize: 18, color: Colors.text, letterSpacing: 2 },
 
   scroll: { padding: Spacing.lg, paddingBottom: 0 },
 
@@ -375,15 +396,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg, paddingVertical: 14,
     borderRadius: Radius.lg, borderWidth: 1,
     borderColor: Colors.border, backgroundColor: Colors.card, marginBottom: 8,
+    boxShadow: 'inset 0 2px 8px rgba(0,50,150,0.08), inset 0 -1px 4px rgba(255,255,255,0.7), 0 2px 6px rgba(0,0,0,0.05)' as any,
   },
-  gameCardActive: { borderColor: Colors.cyan, backgroundColor: 'rgba(0,212,255,0.06)' },
+  gameCardActive: { borderColor: Colors.cyan, backgroundColor: `${Colors.cyan}0d` },
   gameCardLeft:   { flex: 1 },
   todayBadge: {
     alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 2,
-    borderRadius: Radius.full, backgroundColor: 'rgba(0,212,255,0.15)', marginBottom: 4,
+    borderRadius: Radius.full, backgroundColor: `${Colors.cyan}22`, marginBottom: 4,
   },
   todayBadgeText: { fontFamily: Fonts.mono, fontSize: 7, color: Colors.cyan, letterSpacing: 1 },
-  gameOpponent:   { fontFamily: Fonts.orbitron, fontSize: 14, color: Colors.text, letterSpacing: 0.5 },
+  gameOpponent:   { fontFamily: Fonts.rajdhaniBold, fontSize: 16, color: Colors.text, letterSpacing: 0.5 },
   gameMeta:       { fontFamily: Fonts.mono, fontSize: 9, color: Colors.dim, marginTop: 3, letterSpacing: 0.5 },
   gameRadio:      { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: Colors.muted },
   gameRadioActive: { borderColor: Colors.cyan, backgroundColor: Colors.cyan },
@@ -402,13 +424,36 @@ const styles = StyleSheet.create({
     flex: 1, alignItems: 'center', paddingVertical: 20, paddingHorizontal: 12,
     borderRadius: Radius.lg, borderWidth: 1,
     borderColor: Colors.border, backgroundColor: Colors.card, gap: 8,
+    boxShadow: 'inset 0 2px 8px rgba(0,50,150,0.08), inset 0 -1px 4px rgba(255,255,255,0.7), 0 2px 6px rgba(0,0,0,0.05)' as any,
   },
-  modeCardActive: { borderColor: Colors.cyan, backgroundColor: 'rgba(0,212,255,0.07)' },
-  modeLabel:      { fontFamily: Fonts.orbitron, fontSize: 12, color: Colors.muted, letterSpacing: 1 },
-  modeSub:        { fontFamily: Fonts.mono, fontSize: 8, color: Colors.muted, textAlign: 'center', letterSpacing: 0.5, lineHeight: 13 },
+  modeCardActive: { borderColor: Colors.cyan, backgroundColor: `${Colors.cyan}0d` },
+  modeCardLocked: {
+    opacity: 0.45,
+    backgroundColor: Colors.bgDeep,
+    borderColor: Colors.border,
+    boxShadow: 'none' as any,
+  },
+  modeLabel:       { fontFamily: Fonts.rajdhaniBold, fontSize: 15, color: Colors.muted, letterSpacing: 1 },
+  modeLabelLocked: { color: Colors.muted },
+  modeSub:         { fontFamily: Fonts.mono, fontSize: 8, color: Colors.muted, textAlign: 'center', letterSpacing: 0.5, lineHeight: 13 },
+
+  // Lock badge
+  lockBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.muted,
+    marginTop: 2,
+  },
+  lockBadgeText: { fontFamily: Fonts.mono, fontSize: 7, color: '#fff', letterSpacing: 1 },
 
   // Footer
-  footer:       { padding: Spacing.lg, paddingBottom: Spacing.xl, borderTopWidth: 1, borderTopColor: Colors.border },
+  footer:       {
+    padding: Spacing.lg, paddingBottom: Spacing.xl,
+    borderTopWidth: 1, borderTopColor: Colors.border,
+    backgroundColor: Colors.card,
+    boxShadow: '0 -2px 8px rgba(0,30,100,0.07)' as any,
+  },
   startBtn:     { backgroundColor: Colors.cyan, borderRadius: Radius.lg, padding: 16, alignItems: 'center' },
-  startBtnText: { fontFamily: Fonts.orbitron, fontSize: 13, color: '#000', letterSpacing: 2 },
+  startBtnText: { fontFamily: Fonts.rajdhaniBold, fontSize: 16, color: '#fff', letterSpacing: 2 },
 });
