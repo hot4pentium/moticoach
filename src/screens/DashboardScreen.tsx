@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import {
   View,
@@ -10,6 +10,7 @@ import {
   StatusBar,
   useWindowDimensions,
   Image,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +44,8 @@ interface TeamEvent {
   time: string;
   location: string;
   playerCount?: number;
+  bringsDrinks?: string;
+  bringsSnacks?: string;
 }
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
@@ -54,7 +57,7 @@ const d = (offsetDays: number) => {
   return date;
 };
 
-const MOCK_EVENTS: TeamEvent[] = [
+const INITIAL_EVENTS: TeamEvent[] = [
   { id: '1', type: 'game',     title: 'vs Eagles SC',    opponent: 'Eagles SC',   date: d(0),  time: '6:30 PM',  location: 'Turf Stadium',    playerCount: 18 },
   { id: '2', type: 'practice', title: 'PRACTICE',                                  date: d(2),  time: '4:30 PM',  location: 'Field B' },
   { id: '3', type: 'film',     title: 'FILM SESSION',                               date: d(4),  time: '6:00 PM',  location: 'Rec Center' },
@@ -118,8 +121,8 @@ function formatWeekRange(start: Date): string {
   return `${MONTHS[start.getMonth()]} ${start.getDate()} – ${MONTHS[end.getMonth()]} ${end.getDate()}`;
 }
 
-function getEventForDay(date: Date): TeamEvent | undefined {
-  return MOCK_EVENTS.find(e => isSameDay(e.date, date));
+function getEventForDay(date: Date, evts: TeamEvent[]): TeamEvent | undefined {
+  return evts.find(e => isSameDay(e.date, date));
 }
 
 function isToday(date: Date): boolean {
@@ -159,9 +162,10 @@ function desaturate(color: string, amount: number): string {
 export default function DashboardScreen() {
   const { coachSport, greyScale, earnedBadges, pendingBadge, clearPendingBadge,
           avatarUrl, badgeIcon, badgeColor, settingsOpen, openSettings, closeSettings } = useCoach();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const navigation = useNavigation<any>();
   const { width: sw, height: sh } = useWindowDimensions();
+  const [events, setEvents] = useState<TeamEvent[]>(INITIAL_EVENTS);
   const [selectedEvent, setSelectedEvent] = useState<TeamEvent | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
@@ -208,7 +212,12 @@ export default function DashboardScreen() {
     setTimeout(() => setSelectedEvent(null), 300);
   }, []);
 
-  const nextEvent = MOCK_EVENTS.find(e => e.date >= new Date(new Date().setHours(0, 0, 0, 0)));
+  const handleUpdateEvent = useCallback((id: string, updates: Partial<TeamEvent>) => {
+    setEvents(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+    setSelectedEvent(prev => prev?.id === id ? { ...prev, ...updates } : prev);
+  }, []);
+
+  const nextEvent = events.find(e => e.date >= new Date(new Date().setHours(0, 0, 0, 0)));
 
   // Generate 4 weeks from this Monday
   const thisMonday = getMondayOfWeek(new Date());
@@ -319,6 +328,7 @@ export default function DashboardScreen() {
           <WeekRow
             weekStart={weeks[0]}
             days={getWeekDays(weeks[0])}
+            events={events}
             onEventPress={openEvent}
           />
 
@@ -382,6 +392,8 @@ export default function DashboardScreen() {
         event={selectedEvent}
         visible={sheetVisible}
         onClose={closeSheet}
+        canEdit={role === 'coach' || role === 'staff'}
+        onUpdate={handleUpdateEvent}
       />
 
       {/* Onboarding tooltips */}
@@ -542,10 +554,12 @@ const toolGridStyles = StyleSheet.create({
 function WeekRow({
   weekStart,
   days,
+  events,
   onEventPress,
 }: {
   weekStart: Date;
   days: Date[];
+  events: TeamEvent[];
   onEventPress: (e: TeamEvent) => void;
 }) {
   return (
@@ -560,7 +574,7 @@ function WeekRow({
         contentContainerStyle={styles.weekStrip}
       >
         {days.map((date, i) => {
-          const event = getEventForDay(date);
+          const event = getEventForDay(date, events);
           const today = isToday(date);
           return (
             <DayCard
@@ -646,16 +660,37 @@ function EventPreviewSheet({
   event,
   visible,
   onClose,
+  canEdit = false,
+  onUpdate,
 }: {
   event: TeamEvent | null;
   visible: boolean;
   onClose: () => void;
+  canEdit?: boolean;
+  onUpdate?: (id: string, updates: Partial<TeamEvent>) => void;
 }) {
   const { greyScale } = useCoach();
   const ds = (color: string) => desaturate(color, greyScale);
+  const [editing, setEditing] = useState(false);
+  const [drinksVal, setDrinksVal] = useState('');
+  const [snacksVal, setSnacksVal] = useState('');
+
+  useEffect(() => {
+    if (event) {
+      setDrinksVal(event.bringsDrinks ?? '');
+      setSnacksVal(event.bringsSnacks ?? '');
+    }
+    setEditing(false);
+  }, [event?.id]);
+
   if (!event) return null;
   const rawColor = TYPE_COLOR[event.type];
   const color = ds(rawColor);
+
+  const handleSave = () => {
+    onUpdate?.(event.id, { bringsDrinks: drinksVal.trim() || undefined, bringsSnacks: snacksVal.trim() || undefined });
+    setEditing(false);
+  };
 
   return (
     <Modal
@@ -690,23 +725,70 @@ function EventPreviewSheet({
 
           {/* Meta */}
           <View style={styles.sheetMeta}>
-            <Text style={styles.sheetMetaText}>
-              🕐 {event.time}
-            </Text>
-            <Text style={styles.sheetMetaText}>
-              📍 {event.location}
-            </Text>
+            <Text style={styles.sheetMetaText}>🕐 {event.time}</Text>
+            <Text style={styles.sheetMetaText}>📍 {event.location}</Text>
             {event.playerCount && (
-              <Text style={styles.sheetMetaText}>
-                👥 {event.playerCount} Players
-              </Text>
+              <Text style={styles.sheetMetaText}>👥 {event.playerCount} Players</Text>
             )}
           </View>
 
+          {/* Drinks / Snacks */}
+          {editing ? (
+            <View style={styles.sheetEditSection}>
+              <View style={styles.sheetEditRow}>
+                <Text style={styles.sheetEditLabel}>🥤  BRINGING DRINKS</Text>
+                <TextInput
+                  style={styles.sheetEditInput}
+                  value={drinksVal}
+                  onChangeText={setDrinksVal}
+                  placeholder="Enter name…"
+                  placeholderTextColor={Colors.muted}
+                />
+              </View>
+              <View style={styles.sheetEditRow}>
+                <Text style={styles.sheetEditLabel}>🍿  BRINGING SNACKS</Text>
+                <TextInput
+                  style={styles.sheetEditInput}
+                  value={snacksVal}
+                  onChangeText={setSnacksVal}
+                  placeholder="Enter name…"
+                  placeholderTextColor={Colors.muted}
+                />
+              </View>
+            </View>
+          ) : (
+            (event.bringsDrinks || event.bringsSnacks || canEdit) ? (
+              <View style={styles.sheetInfoSection}>
+                <View style={styles.sheetInfoRow}>
+                  <Text style={styles.sheetInfoLabel}>🥤  DRINKS</Text>
+                  <Text style={styles.sheetInfoVal}>{event.bringsDrinks || '—'}</Text>
+                </View>
+                <View style={styles.sheetInfoRow}>
+                  <Text style={styles.sheetInfoLabel}>🍿  SNACKS</Text>
+                  <Text style={styles.sheetInfoVal}>{event.bringsSnacks || '—'}</Text>
+                </View>
+              </View>
+            ) : null
+          )}
         </View>
 
         {/* Buttons */}
         <View style={styles.sheetBtns}>
+          {canEdit && editing && (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity onPress={() => setEditing(false)} style={[styles.sheetBtnSecondary, { flex: 1 }]}>
+                <Text style={styles.sheetBtnSecondaryText}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSave} style={[styles.sheetBtnPrimary, { flex: 1, backgroundColor: color }]}>
+                <Text style={styles.sheetBtnPrimaryText}>SAVE</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {canEdit && !editing && (
+            <TouchableOpacity onPress={() => setEditing(true)} style={styles.sheetBtnSecondary}>
+              <Text style={styles.sheetBtnSecondaryText}>EDIT EVENT</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={onClose} style={styles.sheetBtnClose}>
             <Text style={styles.sheetBtnCloseText}>CLOSE</Text>
           </TouchableOpacity>
@@ -743,7 +825,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
+    paddingLeft: 0,
+    paddingRight: Spacing.md,
     paddingVertical: Spacing.lg,
   },
   headerPills: { flexDirection: 'row', gap: 6 },
@@ -1107,6 +1190,36 @@ const styles = StyleSheet.create({
   sheetOpponent: { fontSize: 14, fontFamily: Fonts.rajdhani, fontWeight: '700', marginBottom: 8 },
   sheetMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
   sheetMetaText: { fontFamily: Fonts.rajdhani, fontSize: 12, color: Colors.dim },
+  sheetInfoSection: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: Spacing.sm,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  sheetInfoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sheetInfoLabel: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.muted, letterSpacing: 1 },
+  sheetInfoVal: { fontFamily: Fonts.rajdhaniBold, fontSize: 14, color: Colors.text },
+  sheetEditSection: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: Spacing.sm,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  sheetEditRow: { gap: 4 },
+  sheetEditLabel: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.muted, letterSpacing: 1 },
+  sheetEditInput: {
+    backgroundColor: Colors.bgDeep,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    fontFamily: Fonts.rajdhani,
+    fontSize: 14,
+    color: Colors.text,
+  },
   prepPill: {
     flexDirection: 'row',
     alignItems: 'center',

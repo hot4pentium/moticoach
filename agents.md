@@ -4,44 +4,38 @@
 ## Current Focus
 _What we're working on right now_
 
-Athlete dashboard polish — AthleteProfileScreen is the athlete landing page, fully built out.
+Game Day Live Engagement sprint — implemented supporter live session screen, fan tap mechanic, shoutout grid, and athlete fan support dashboard.
 
 ## Recent Changes
 _Last few things completed_
 
-- **Fonts**: App-wide migration to Poppins (`@expo-google-fonts/poppins`). All `Fonts.*` constants in `src/theme/index.ts` remapped to Poppins weights. No per-file changes needed.
-- **SVG background**: `public/dashboard-bg.svg` added; referenced via CSS `backgroundImage: "url('/dashboard-bg.svg')"` on DashboardScreen and SupporterHomeScreen containers.
-- **Hero banner**: Reduced height (minHeight 160→compact), `borderRadius: 28` uniform, `overflow: 'hidden'`. Avatar container is now rectangular (`Radius.lg`, flex:1 fill).
-- **AthleteProfileScreen** (`src/screens/AthleteProfileScreen.tsx`): New full-screen athlete dashboard. Serves as Home tab via `AthleteOrSupporterHome` wrapper in navigation. Sections: hero (with badge watermark), roster card, season stats (team/individual mode), achievements, expandable calendar, team comms preview, quick links, ProfileSheet modal.
-- **Navigation** (`src/navigation/index.tsx`): `AthleteOrSupporterHome` wrapper routes athletes to `AthleteProfileScreen`, supporters to `SupporterHomeScreen`. `AthleteProfile` added as modal stack screen (slide_from_bottom).
-- **SupporterHomeScreen**: Avatar tap is role-aware — athletes → AthleteProfile, supporters → ProfileSheet.
-- **Season stats mode**: Reads `teams/{teamCode}.trackingMode` ('individual' | 'team') from Firestore; shows team-stats banner with Games/Wins if 'team'.
-- **Team badge watermark**: `badgeIcon`/`badgeColor` from CoachContext rendered at 90px, 50% opacity, right-aligned in hero info row.
-- **Expandable calendar**: WeekRow/DayCard components in AthleteProfileScreen, 4 weeks, toggle with "SEE FULL CALENDAR ▼".
-- **Team comms preview**: onSnapshot on `teamChats/{teamCode}/messages` (last 3), role-colored sender dots, "VIEW ALL →" to Chat tab.
+- **GameDayLiveScreen** (`src/screens/GameDayLiveScreen.tsx`): New screen. Supporters enter a 2-hour session (pregame confirm → active → paused/halftime → ended). Live Taps button (3 taps = +1 point). 3-column alphabetical shoutout grid for roster players. 15-min extension prompt (+30/+60 min). End session → batch upload to Firestore `teams/{teamCode}/gameEngagements`.
+- **SupporterHomeScreen** (`src/screens/SupporterHomeScreen.tsx`): GameDayLiveCard upgraded from static placeholder to a tappable nav button → GameDayLiveScreen.
+- **AthleteProfileScreen** (`src/screens/AthleteProfileScreen.tsx`): Added FAN SUPPORT card (shows team live taps + personal shoutout count if > 0). Post-game celebration modal fires once per engagement (localStorage-gated). Uses `onSnapshot` on `teams/{teamCode}/gameEngagements`.
+- **Navigation** (`src/navigation/index.tsx`): Registered `GameDayLive` screen in SupporterStack.
 
 ## In Progress / Open Issues
 _Unfinished work, bugs, or blockers_
 
-- Roster card JERSEY/POSITION data is placeholder (`#--`, `—`) — needs to be wired to Firestore roster data when that's available
-- Season stats individual values are all placeholder `—` — needs real stat persistence
-- Highlights quick link is locked/coming soon
+- Roster card JERSEY/POSITION data is placeholder (`#--`, `—`) — needs Firestore wire-up
+- Season stats individual values are placeholder `—`
+- GameDayLiveScreen loads real roster from Firestore `teams/{teamCode}/roster` — if roster is empty (mock-only teams), shows "No players loaded" fallback
+- Firestore security rules not yet updated for `teams/{teamCode}/gameEngagements` collection
 
 ## Key Files Being Touched
 _Files actively edited this session_
 
-- `src/screens/AthleteProfileScreen.tsx` — primary athlete dashboard (new)
-- `src/screens/SupporterHomeScreen.tsx` — role-aware avatar tap
-- `src/navigation/index.tsx` — AthleteOrSupporterHome wrapper + AthleteProfile screen
-- `src/theme/index.ts` — Poppins font mapping
-- `App.tsx` — Poppins font loading
+- `src/screens/GameDayLiveScreen.tsx` — new screen (created)
+- `src/screens/SupporterHomeScreen.tsx` — GameDayLiveCard → navigable button
+- `src/screens/AthleteProfileScreen.tsx` — FAN SUPPORT card + celebration modal
+- `src/navigation/index.tsx` — GameDayLive registered in SupporterStack
 
 ## Next Steps
 _Planned work after current task_
 
-- Wire real roster data (jersey/position) from Firestore into AthleteProfileScreen roster card
-- Wire real individual stats from Firestore into season stats columns
-- Consider live events from Firestore instead of MOCK_EVENTS
+- Add Firestore security rules for `teams/{teamCode}/gameEngagements` (write: supporter/staff; read: all team members)
+- Wire real roster data (jersey/position) into AthleteProfileScreen roster card
+- Future: when `isPaid` + individual stat tracking active, highlight "in game" players in GameDayLiveScreen shoutout grid
 
 ## Context / Decisions Made
 _Anything that would help a new thread understand why things are the way they are_

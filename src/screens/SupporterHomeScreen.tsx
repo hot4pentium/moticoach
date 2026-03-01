@@ -40,6 +40,8 @@ interface TeamEvent {
   time: string;
   location: string;
   playerCount?: number;
+  bringsDrinks?: string;
+  bringsSnacks?: string;
 }
 
 const DAYS   = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
@@ -264,7 +266,7 @@ export default function SupporterHomeScreen() {
         )}
 
         {/* Game Day Live */}
-        <GameDayLiveCard />
+        <GameDayLiveCard navigation={navigation} />
 
         <View style={styles.sectionDivider} />
 
@@ -400,22 +402,27 @@ function TeamAccessGrid({ role, navigation }: { role: string | null; navigation:
 
 // ─── Game Day Live Card ────────────────────────────────────────────────────────
 
-function GameDayLiveCard() {
+function GameDayLiveCard({ navigation }: { navigation: any }) {
   return (
-    <View style={gdlStyles.card}>
+    <TouchableOpacity
+      style={gdlStyles.card}
+      onPress={() => navigation.navigate('GameDayLive')}
+      activeOpacity={0.85}
+    >
       <View style={gdlStyles.accent} />
       <View style={gdlStyles.body}>
         <View style={gdlStyles.titleRow}>
           <View style={gdlStyles.liveDot} />
           <Text style={gdlStyles.title}>GAME DAY LIVE</Text>
+          <Ionicons name="chevron-forward" size={14} color={Colors.amber} style={{ marginLeft: 'auto' }} />
         </View>
-        <Text style={gdlStyles.sub}>Real-time scores & updates during games</Text>
-        <View style={gdlStyles.comingSoon}>
+        <Text style={gdlStyles.sub}>Tap reactions & shoutout players during games</Text>
+        <View style={gdlStyles.cta}>
           <Ionicons name="flash-outline" size={11} color={Colors.amber} />
-          <Text style={gdlStyles.comingSoonText}>COMING SOON</Text>
+          <Text style={gdlStyles.ctaText}>TAP TO JOIN</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -425,19 +432,18 @@ const gdlStyles = StyleSheet.create({
     marginTop: Spacing.sm,
     backgroundColor: Colors.card,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: `${Colors.amber}44`,
     borderRadius: Radius.lg,
     overflow: 'hidden' as any,
-    opacity: 0.75,
   },
-  accent:       { height: 3, backgroundColor: Colors.amber, width: '100%' },
-  body:         { padding: Spacing.md, gap: 4 },
-  titleRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  liveDot:      { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.amber, opacity: 0.5 },
-  title:        { fontFamily: Fonts.monoBold, fontSize: 13, color: Colors.text, letterSpacing: 1.5 },
-  sub:          { fontFamily: Fonts.rajdhani, fontSize: 13, color: Colors.dim },
-  comingSoon:   { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  comingSoonText: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.amber, letterSpacing: 1 },
+  accent:   { height: 3, backgroundColor: Colors.amber, width: '100%' },
+  body:     { padding: Spacing.md, gap: 4 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  liveDot:  { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.amber },
+  title:    { fontFamily: Fonts.monoBold, fontSize: 13, color: Colors.amber, letterSpacing: 1.5 },
+  sub:      { fontFamily: Fonts.rajdhani, fontSize: 13, color: Colors.dim },
+  cta:      { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  ctaText:  { fontFamily: Fonts.mono, fontSize: 9, color: Colors.amber, letterSpacing: 1 },
 });
 
 const gridStyles = StyleSheet.create({
@@ -591,6 +597,18 @@ function EventSheet({
                 <Text style={styles.sheetMetaText}>👥 {event.playerCount} Players</Text>
               )}
             </View>
+            {(event.bringsDrinks || event.bringsSnacks) && (
+              <View style={styles.sheetInfoSection}>
+                <View style={styles.sheetInfoRow}>
+                  <Text style={styles.sheetInfoLabel}>🥤  DRINKS</Text>
+                  <Text style={styles.sheetInfoVal}>{event.bringsDrinks || '—'}</Text>
+                </View>
+                <View style={styles.sheetInfoRow}>
+                  <Text style={styles.sheetInfoLabel}>🍿  SNACKS</Text>
+                  <Text style={styles.sheetInfoVal}>{event.bringsSnacks || '—'}</Text>
+                </View>
+              </View>
+            )}
             {event.type === 'game' && (
               <TouchableOpacity style={styles.gdlBtn} activeOpacity={0.85}>
                 <Text style={styles.gdlBtnText}>⚡ GAME DAY LIVE</Text>
@@ -632,7 +650,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
+    paddingLeft: 0,
+    paddingRight: Spacing.md,
     paddingVertical: Spacing.lg,
   },
   exitBtn:     { paddingHorizontal: 8, paddingVertical: 3, marginLeft: 2 },
@@ -655,8 +674,6 @@ const styles = StyleSheet.create({
   },
   heroLeft: { flex: 1 },
   heroRight: {
-    alignItems: 'center',
-    justifyContent: 'center',
     alignSelf: 'stretch',
     width: 120,
   },
@@ -699,9 +716,10 @@ const styles = StyleSheet.create({
   },
   sportBadgeText: { fontFamily: Fonts.mono, fontSize: 9, color: HeroText.secondary, letterSpacing: 1 },
 
-  avatarWrap: { position: 'relative', flex: 1, alignSelf: 'stretch' },
+  avatarWrap: { position: 'relative', flex: 1, width: '100%' },
   avatarCircle: {
     flex: 1,
+    width: '100%',
     borderRadius: Radius.lg,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.6)',
@@ -835,6 +853,10 @@ const styles = StyleSheet.create({
   sheetTitle:     { fontFamily: Fonts.rajdhaniBold, fontSize: 26, color: Colors.text, lineHeight: 30, marginBottom: 10 },
   sheetMeta:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
   sheetMetaText:  { fontFamily: Fonts.rajdhani, fontSize: 12, color: Colors.dim },
+  sheetInfoSection: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: Spacing.sm, gap: Spacing.sm, marginBottom: Spacing.sm },
+  sheetInfoRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sheetInfoLabel: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.muted, letterSpacing: 1 },
+  sheetInfoVal:   { fontFamily: Fonts.rajdhaniBold, fontSize: 14, color: Colors.text },
   gdlBtn: {
     padding: Spacing.md,
     borderRadius: Radius.md,

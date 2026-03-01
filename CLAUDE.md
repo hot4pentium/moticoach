@@ -56,7 +56,7 @@ Auth gate drives all routing — no manual navigation calls for auth transitions
 - `role === 'athlete'` → `AthleteNavigator` (tab-free single-screen stack — just `AthleteProfileScreen`)
 - `role === 'supporter' | 'staff'` → `SupporterStack` (Home + Chat tabs)
 
-`AuthScreen` has optional `onBack?: () => void` prop — renders "← Back" button only when provided (web flow only).
+`AuthScreen` has an optional `onBack?: () => void` prop, but it is **not passed** from the auth gate — the back button is not shown.
 
 **CoachTabs** modal stack screens: Roster, StatTrackerSetup, StatTrackerLive, StatTrackerSummary, Playmaker, PrepBook, PlayEditor, DMList, DMConversation, NewDM.
 
@@ -79,7 +79,7 @@ Four roles: `coach` | `staff` | `supporter` | `athlete`
 
 ## Auth System
 - `src/context/AuthContext.tsx` — `AuthProvider` wraps `onAuthStateChanged`, fetches `role`, `teamCode`, `displayName`, and `notificationPrefs` from `users/{uid}` in Firestore. Exports `useAuth()` → `{ user, role, teamCode, displayName, notificationPrefs, loading, setRole, setTeamCode, setDisplayName }`. Setters update context immediately after signup. Also triggers `registerWebPush(uid)` after user data loads (web only; respects `notificationPrefs.push`).
-- `src/screens/AuthScreen.tsx` — single screen, LOG IN / SIGN UP toggle, email+password, mapped Firebase error messages. Optional `onBack` prop shows "← Back" for web unauthenticated flow.
+- `src/screens/AuthScreen.tsx` — single screen, LOG IN / SIGN UP toggle, email+password, mapped Firebase error messages. Has optional `onBack` prop but it is not currently passed — no back button shown.
 - `src/screens/RoleSelectScreen.tsx` — shown once after signup. All roles enter a team code. See "Team Claiming" section below.
 
 ## Team Claiming (`src/screens/RoleSelectScreen.tsx`)
@@ -155,6 +155,8 @@ teams/{teamCode}
 
 teams/{teamCode}/events/{eventId}
   type, title, date, time, location, published
+  bringsDrinks?: string   ← name of person bringing drinks (coach/staff editable)
+  bringsSnacks?: string   ← name of person bringing snacks (coach/staff editable)
 
 teams/{teamCode}/roster/{entryId}
   name, jersey, position, parentName?, parentEmail?, parentPhone?
@@ -207,9 +209,10 @@ The hub lives in Firestore under `teams/{teamCode}` and is **live the moment adm
 
 ## LogoMark Component (`src/components/LogoMark.tsx`)
 - Renders the app logo using `assets/Logos/No-BG.png` (transparent background PNG, 1320×880)
-- Uses `overflow: 'hidden'` + negative `marginTop` to crop the transparent padding from the image
+- Uses `overflow: 'hidden'` + negative `marginTop` to crop the transparent vertical padding from the image
 - Sizes: `sm` (headers, 60px), `md` (footer, 72px), `lg` (auth screen, 90px)
 - Used in: `DashboardScreen`, `SupporterHomeScreen`, `ChatScreen` headers (sm), `AuthScreen` brand (lg), `LandingScreen` nav + footer (sm/md)
+- **Known issue — horizontal transparent padding**: The PNG has ~350px of transparent space on each side of the visible logo content (logo is centered in a 1320px canvas). When stretched to `imgW=375px` for 'sm', the visible mark appears roughly centered in the component — not left-aligned. Headers use `paddingLeft: 0, paddingRight: Spacing.md` on `headerInner` (rather than `paddingHorizontal`) to partially compensate, but true left-alignment requires either (a) exporting a tighter-cropped PNG, or (b) adding horizontal image offset logic to LogoMark.
 
 ## Dashboard Layout (Coach, Supporter & Staff)
 
@@ -217,7 +220,7 @@ The hub lives in Firestore under `teams/{teamCode}` and is **live the moment adm
 1. Header — LeagueMatrix logo + `⏻` sign-out
 2. Hero (`Gradients.hero`, avatar tap → `TeamSettingsSheet`)
 3. BadgeShelf
-4. Next Event card → EventPreviewSheet
+4. Next Event card → EventPreviewSheet (coach/staff see EDIT EVENT button → edit `bringsDrinks`/`bringsSnacks` inline)
 5. Schedule (week row → SEE FULL CALENDAR navigates to CalendarScreen)
 6. Tools grid ("COACH TOOLS"): Playmaker, Roster, Stat Tracker, Prep Book, Highlights
 
@@ -225,7 +228,7 @@ The hub lives in Firestore under `teams/{teamCode}` and is **live the moment adm
 1. Header — LeagueMatrix logo + `⏻` sign-out
 2. Hero (`Gradients.hero`): role tag = `STAFF DASHBOARD` / `SUPPORTER DASHBOARD` / `ATHLETE DASHBOARD`; avatar tap → ProfileSheet (for supporter/staff) or navigate AthleteProfile (athlete)
 3. BadgeShelf
-4. Next Event card → EventSheet
+4. Next Event card → EventSheet (shows `bringsDrinks`/`bringsSnacks` read-only if set)
 5. **Game Day Live card** — amber-accented placeholder card ("COMING SOON"), sits between next event and schedule
 6. Schedule (expandable 4 weeks, DayCard tappable → EventSheet)
 7. Tools grid:
@@ -238,7 +241,7 @@ Both use `maxWidth: 800, alignSelf: 'center'` inner wrapper for wide-screen cent
 This is the **athlete's entire app** — the root screen of `AthleteNavigator` (no tabs, no bottom nav). Also accessible as a modal from `SupporterHomeScreen` (My Stats tool).
 
 **Header:** `[🏠 HOME (when canGoBack is false) / ← BACK]` · `MY PROFILE` · `[⚙ settings | ⏻ sign-out]`
-- `⏻` shows `Alert.alert` confirmation before calling `signOut(auth)`
+- `⏻` calls `signOut(auth)` directly — no confirmation dialog
 - Content constrained to `maxWidth: 800, alignSelf: 'center'` for wide screens
 
 **Sections (top to bottom):**
@@ -251,7 +254,7 @@ This is the **athlete's entire app** — the root screen of `AthleteNavigator` (
    - `'individual'` (default): sport-specific columns from `SPORT_STATS` map, placeholder "—"
    - `'team'`: blue "Team stats mode" banner + Games/Wins columns
 4. **Achievements** — `<BadgeShelf earnedBadges={earnedBadges} onBadgePress={...} />`
-5. **Schedule** — expandable calendar: `WeekRow`/`DayCard` (Mon–Sun strip). **DayCard is a `TouchableOpacity`** — tapping an event opens `EventSheet` (slide-up modal with type badge, title, opponent, time, location). "SEE FULL CALENDAR ▼" toggles 3 additional weeks.
+5. **Schedule** — expandable calendar: `WeekRow`/`DayCard` (Mon–Sun strip). **DayCard is a `TouchableOpacity`** — tapping an event opens `EventSheet` (slide-up modal with type badge, title, opponent, time, location, and drinks/snacks if set). "SEE FULL CALENDAR ▼" toggles 3 additional weeks.
 6. **Team Comms** — live `onSnapshot` on `teamChats/{teamCode}/messages` (last 20, desc). Shows 3 by default, "SHOW MORE (N) ▼" expands. Inline `TextInput` + send button — athlete sends to whole team only (no DMs, no separate chat screen).
 7. **Quick Access** — Playbook + Highlights (locked/coming soon)
 8. **Modals** — `EventSheet` (calendar taps), `ProfileSheet` (settings gear)

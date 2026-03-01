@@ -40,6 +40,7 @@ import AuthScreen               from '../screens/AuthScreen';
 import RoleSelectScreen         from '../screens/RoleSelectScreen';
 import SupporterHomeScreen      from '../screens/SupporterHomeScreen';
 import AthleteProfileScreen     from '../screens/AthleteProfileScreen';
+import GameDayLiveScreen        from '../screens/GameDayLiveScreen';
 
 // ─── Navigators ──────────────────────────────────────────────────────────────
 
@@ -226,6 +227,7 @@ function SupporterStack() {
       <Stack.Screen name="StatTrackerLive"     component={withFilter(StatTrackerLiveScreen)}    options={{ animation: 'slide_from_right'  }} />
       <Stack.Screen name="StatTrackerSummary"  component={withFilter(StatTrackerSummaryScreen)} options={{ animation: 'slide_from_right'  }} />
       <Stack.Screen name="Highlights"          component={HighlightsScreen}                     options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="GameDayLive"         component={GameDayLiveScreen}                    options={{ animation: 'slide_from_bottom' }} />
     </Stack.Navigator>
   );
 }
@@ -365,7 +367,7 @@ function AuthGate() {
   if (!user) {
     if (Platform.OS === 'web' && showDemo) return <DemoShell onExitDemo={() => setShowDemo(false)} />;
     if (Platform.OS === 'web' && !showAuth) return <LandingScreen onSignIn={() => setShowAuth(true)} onTryDemo={() => setShowDemo(true)} />;
-    return <AuthScreen onBack={Platform.OS === 'web' ? () => setShowAuth(false) : undefined} />;
+    return <AuthScreen />;
   }
   if (!role) return <RoleSelectScreen />;
 

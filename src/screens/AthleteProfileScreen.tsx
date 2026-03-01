@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   Modal,
   Image,
   ActivityIndicator,
@@ -15,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { doc, getDoc, updateDoc, collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -39,6 +38,8 @@ interface TeamEvent {
   date: Date;
   time: string;
   location: string;
+  bringsDrinks?: string;
+  bringsSnacks?: string;
 }
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
@@ -120,6 +121,15 @@ function formatWeekRange(start: Date): string {
 
 function getEventForDay(date: Date): TeamEvent | undefined {
   return MOCK_EVENTS.find(e => isSameDay(e.date, date));
+}
+
+// ─── Engagement Types ─────────────────────────────────────────────────────────
+
+interface EngagementSummary {
+  id: string;
+  livePoints: number;
+  liveTaps: number;
+  myShoutouts: number;
 }
 
 // ─── Message Types ────────────────────────────────────────────────────────────
@@ -218,6 +228,18 @@ function EventSheet({ event, visible, onClose }: {
               <Text style={evStyles.metaText}>🕐  {event.time}</Text>
               <Text style={evStyles.metaText}>📍  {event.location}</Text>
             </View>
+            {(event.bringsDrinks || event.bringsSnacks) && (
+              <View style={evStyles.infoSection}>
+                <View style={evStyles.infoRow}>
+                  <Text style={evStyles.infoLabel}>🥤  DRINKS</Text>
+                  <Text style={evStyles.infoVal}>{event.bringsDrinks || '—'}</Text>
+                </View>
+                <View style={evStyles.infoRow}>
+                  <Text style={evStyles.infoLabel}>🍿  SNACKS</Text>
+                  <Text style={evStyles.infoVal}>{event.bringsSnacks || '—'}</Text>
+                </View>
+              </View>
+            )}
           </View>
           <TouchableOpacity style={evStyles.closeBtn} onPress={onClose}>
             <Text style={evStyles.closeBtnText}>CLOSE</Text>
@@ -247,6 +269,10 @@ const evStyles = StyleSheet.create({
   opponent:   { fontFamily: Fonts.monoBold, fontSize: 13, letterSpacing: 0.5 },
   meta:       { gap: Spacing.sm, marginTop: Spacing.xs },
   metaText:   { fontFamily: Fonts.rajdhani, fontSize: 15, color: Colors.dim },
+  infoSection: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: Spacing.sm, gap: Spacing.sm },
+  infoRow:    { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
+  infoLabel:  { fontFamily: Fonts.mono, fontSize: 10, color: Colors.muted, letterSpacing: 1 },
+  infoVal:    { fontFamily: Fonts.rajdhaniBold, fontSize: 14, color: Colors.text },
   closeBtn:   { marginTop: Spacing.xl, marginHorizontal: Spacing.xl, paddingVertical: Spacing.md, alignItems: 'center', borderTopWidth: 1, borderTopColor: Colors.border },
   closeBtnText: { fontFamily: Fonts.mono, fontSize: 11, color: Colors.muted, letterSpacing: 1.5 },
 });
@@ -295,6 +321,8 @@ export default function AthleteProfileScreen() {
   const [sending, setSending]                 = useState(false);
   const [trackingMode, setTrackingMode]       = useState<'individual' | 'team' | null>(null);
   const [gamesTracked, setGamesTracked]       = useState<number>(0);
+  const [latestEngagement, setLatestEngagement] = useState<EngagementSummary | null>(null);
+  const [showFanModal,     setShowFanModal]     = useState(false);
 
   // Load avatar + team name
   useEffect(() => {
@@ -327,6 +355,35 @@ export default function AthleteProfileScreen() {
       setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() } as Message)));
     });
   }, [teamCode]);
+
+  // Load latest game engagement — shows fan support card + celebration modal
+  useEffect(() => {
+    if (!teamCode || !displayName || !user) return;
+    const q = query(
+      collection(db, 'teams', teamCode, 'gameEngagements'),
+      orderBy('submittedAt', 'desc'),
+      limit(1),
+    );
+    return onSnapshot(q, snap => {
+      if (snap.empty) return;
+      const d = snap.docs[0];
+      const data = d.data();
+      const myShoutouts = (data.shoutouts?.[displayName] ?? 0) as number;
+      setLatestEngagement({
+        id: d.id,
+        livePoints: data.livePoints ?? 0,
+        liveTaps: data.liveTaps ?? 0,
+        myShoutouts,
+      });
+      if (myShoutouts > 0 && typeof localStorage !== 'undefined') {
+        const seenKey = `seen_engagement_${teamCode}_${d.id}_${user.uid}`;
+        if (!localStorage.getItem(seenKey)) {
+          localStorage.setItem(seenKey, '1');
+          setShowFanModal(true);
+        }
+      }
+    });
+  }, [teamCode, displayName, user]);
 
   const sendMessage = async () => {
     const trimmed = chatText.trim();
@@ -366,16 +423,7 @@ export default function AthleteProfileScreen() {
     input.click();
   };
 
-  const handleSignOut = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: () => signOut(auth) },
-      ]
-    );
-  };
+  const handleSignOut = () => signOut(auth);
 
   const statDefs = SPORT_STATS[coachSport] ?? SPORT_STATS.soccer;
 
@@ -468,6 +516,33 @@ export default function AthleteProfileScreen() {
               </View>
             </View>
           </LinearGradient>
+
+          {/* ── Fan Support Card ── */}
+          {latestEngagement && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>FAN SUPPORT</Text>
+              <View style={fanStyles.card}>
+                <View style={fanStyles.tapsRow}>
+                  <Ionicons name="flash" size={16} color={Colors.amber} />
+                  <Text style={fanStyles.tapsValue}>{latestEngagement.liveTaps}</Text>
+                  <Text style={fanStyles.tapsSep}>→</Text>
+                  <Text style={fanStyles.pointsValue}>{latestEngagement.livePoints}</Text>
+                  <Text style={fanStyles.tapsLabel}>TEAM CHEER POINTS</Text>
+                </View>
+                {latestEngagement.myShoutouts > 0 && (
+                  <View style={fanStyles.shoutoutRow}>
+                    <Text style={fanStyles.shoutoutLabel}>YOUR SHOUTOUTS</Text>
+                    <View style={fanStyles.shoutoutBar}>
+                      {Array.from({ length: Math.min(latestEngagement.myShoutouts, 10) }).map((_, i) => (
+                        <View key={i} style={fanStyles.shoutoutPip} />
+                      ))}
+                    </View>
+                    <Text style={fanStyles.shoutoutCount}>{latestEngagement.myShoutouts}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
 
           {/* ── Roster Card ── */}
           <View style={styles.section}>
@@ -670,9 +745,113 @@ export default function AthleteProfileScreen() {
         avatarUrl={avatarUrl}
         onAvatarChange={setAvatarUrl}
       />
+
+      {/* ── Fan Celebration Modal ── */}
+      <Modal visible={showFanModal} transparent animationType="fade">
+        <View style={fanStyles.modalOverlay}>
+          <View style={fanStyles.modalCard}>
+            <Ionicons name="flash" size={40} color={Colors.amber} />
+            <Text style={fanStyles.modalTitle}>YOUR FANS SHOWED UP!</Text>
+            <Text style={fanStyles.modalCount}>{latestEngagement?.myShoutouts ?? 0}</Text>
+            <Text style={fanStyles.modalSub}>
+              shoutout{(latestEngagement?.myShoutouts ?? 0) !== 1 ? 's' : ''} from your supporters today
+            </Text>
+            <TouchableOpacity style={fanStyles.modalBtn} onPress={() => setShowFanModal(false)}>
+              <Text style={fanStyles.modalBtnText}>AWESOME!</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+// ─── Fan Support Styles ───────────────────────────────────────────────────────
+
+const fanStyles = StyleSheet.create({
+  card: {
+    backgroundColor: `${Colors.amber}0a`,
+    borderWidth: 1,
+    borderColor: `${Colors.amber}33`,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  tapsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    flexWrap: 'wrap',
+  },
+  tapsValue:  { fontFamily: Fonts.monoBold, fontSize: 22, color: Colors.text },
+  tapsSep:    { fontFamily: Fonts.mono, fontSize: 14, color: Colors.muted },
+  pointsValue:{ fontFamily: Fonts.monoBold, fontSize: 22, color: Colors.amber },
+  tapsLabel:  { fontFamily: Fonts.mono, fontSize: 9, color: Colors.muted, letterSpacing: 1 },
+  shoutoutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: `${Colors.amber}22`,
+    paddingTop: Spacing.sm,
+  },
+  shoutoutLabel: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.amber, letterSpacing: 1 },
+  shoutoutBar:   { flex: 1, flexDirection: 'row', gap: 4 },
+  shoutoutPip: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.amber,
+  },
+  shoutoutCount: { fontFamily: Fonts.monoBold, fontSize: 18, color: Colors.amber },
+
+  // Celebration modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+  },
+  modalCard: {
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: `${Colors.amber}44`,
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
+    alignItems: 'center',
+    gap: Spacing.md,
+    width: '100%',
+    maxWidth: 340,
+  },
+  modalTitle: {
+    fontFamily: Fonts.monoBold,
+    fontSize: 16,
+    color: Colors.text,
+    letterSpacing: 1.5,
+    textAlign: 'center',
+  },
+  modalCount: {
+    fontFamily: Fonts.monoBold,
+    fontSize: 56,
+    color: Colors.amber,
+    lineHeight: 64,
+  },
+  modalSub: {
+    fontFamily: Fonts.rajdhani,
+    fontSize: 16,
+    color: Colors.dim,
+    textAlign: 'center',
+  },
+  modalBtn: {
+    backgroundColor: Colors.amber,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    marginTop: Spacing.sm,
+  },
+  modalBtnText: { fontFamily: Fonts.monoBold, fontSize: 13, color: Colors.bg, letterSpacing: 1.5 },
+});
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
