@@ -39,14 +39,16 @@ import NewDMScreen              from '../screens/NewDMScreen';
 import AuthScreen               from '../screens/AuthScreen';
 import RoleSelectScreen         from '../screens/RoleSelectScreen';
 import SupporterHomeScreen      from '../screens/SupporterHomeScreen';
+import AthleteProfileScreen     from '../screens/AthleteProfileScreen';
 
 // ─── Navigators ──────────────────────────────────────────────────────────────
 
-const Tab          = createBottomTabNavigator();
-const Stack        = createNativeStackNavigator();
-const DashStack    = createNativeStackNavigator();
-const ChatNavStack = createNativeStackNavigator();
-const StatsStack   = createNativeStackNavigator();
+const Tab           = createBottomTabNavigator();
+const Stack         = createNativeStackNavigator();
+const DashStack     = createNativeStackNavigator();
+const ChatNavStack  = createNativeStackNavigator();
+const StatsStack    = createNativeStackNavigator();
+const AthleteNavStack = createNativeStackNavigator();
 
 // ─── Desaturation HOC ────────────────────────────────────────────────────────
 
@@ -90,13 +92,13 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           };
           return (
             <TouchableOpacity key={route.key} style={styles.tabItem} onPress={onPress} activeOpacity={0.7}>
-              {options.tabBarIcon?.({ focused, color: focused ? Colors.blue : Colors.muted, size: 22 })}
+              {options.tabBarIcon?.({ focused, color: focused ? Colors.blue : Colors.dim, size: 22 })}
             </TouchableOpacity>
           );
         })}
         <TouchableOpacity style={styles.tabItem} onPress={openSettings} activeOpacity={0.7}>
           <View style={styles.tabIcon}>
-            <Ionicons name="settings-outline" size={22} color={Colors.muted} />
+            <Ionicons name="settings-outline" size={22} color={Colors.dim} />
             <Text style={styles.tabLabel}>SETTINGS</Text>
           </View>
         </TouchableOpacity>
@@ -195,6 +197,14 @@ function SupporterTabs() {
   );
 }
 
+function AthleteNavigator() {
+  return (
+    <AthleteNavStack.Navigator screenOptions={{ headerShown: false }}>
+      <AthleteNavStack.Screen name="AthleteHome" component={withFilter(AthleteProfileScreen)} />
+    </AthleteNavStack.Navigator>
+  );
+}
+
 // ─── Root Stacks ──────────────────────────────────────────────────────────────
 
 function SupporterStack() {
@@ -202,9 +212,20 @@ function SupporterStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Tabs" component={SupporterTabs} />
       {/* DM modals */}
-      <Stack.Screen name="DMList"         component={DMListScreen}         options={{ animation: 'slide_from_bottom' }} />
-      <Stack.Screen name="NewDM"          component={NewDMScreen}          options={{ animation: 'slide_from_bottom' }} />
-      <Stack.Screen name="DMConversation" component={DMConversationScreen} options={{ animation: 'slide_from_right'  }} />
+      <Stack.Screen name="DMList"              component={DMListScreen}                                          options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="NewDM"               component={NewDMScreen}                                          options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="DMConversation"      component={DMConversationScreen}                                  options={{ animation: 'slide_from_right'  }} />
+      {/* Athlete profile */}
+      <Stack.Screen name="AthleteProfile"      component={AthleteProfileScreen}                                  options={{ animation: 'slide_from_bottom' }} />
+      {/* Staff coaching screens */}
+      <Stack.Screen name="Roster"              component={withFilter(RosterScreen)}             options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="Playmaker"           component={withFilter(PlaymakerScreen)}          options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="PrepBook"            component={withFilter(PrepBookScreen)}           options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="PlayEditor"          component={withFilter(PlayEditorScreen)}         options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="StatTrackerSetup"    component={withFilter(StatTrackerSetupScreen)}   options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="StatTrackerLive"     component={withFilter(StatTrackerLiveScreen)}    options={{ animation: 'slide_from_right'  }} />
+      <Stack.Screen name="StatTrackerSummary"  component={withFilter(StatTrackerSummaryScreen)} options={{ animation: 'slide_from_right'  }} />
+      <Stack.Screen name="Highlights"          component={HighlightsScreen}                     options={{ animation: 'slide_from_bottom' }} />
     </Stack.Navigator>
   );
 }
@@ -348,7 +369,8 @@ function AuthGate() {
   }
   if (!role) return <RoleSelectScreen />;
 
-  if (role === 'coach' || role === 'staff') return <CoachTabs />;
+  if (role === 'coach') return <CoachTabs />;
+  if (role === 'athlete') return <AthleteNavigator />;
   return <SupporterStack />;
 }
 

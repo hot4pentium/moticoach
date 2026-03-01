@@ -39,13 +39,13 @@ export const HeroText = {
 } as const;
 
 export const Fonts = {
-  orbitron:      'Orbitron_900Black',      // Large numbers/scores only
-  orbitronBold:  'Orbitron_700Bold',
-  orbitronLight: 'Orbitron_400Regular',
-  mono:          'JetBrainsMono_400Regular',  // Labels, data, badges
-  monoBold:      'JetBrainsMono_600SemiBold',
-  rajdhani:      'Rajdhani_600SemiBold',      // Body text
-  rajdhaniBold:  'Rajdhani_700Bold',          // Display headings
+  orbitron:      'Poppins_800ExtraBold',   // Large numbers/scores
+  orbitronBold:  'Poppins_700Bold',
+  orbitronLight: 'Poppins_300Light',
+  mono:          'Poppins_400Regular',     // Labels, data, badges
+  monoBold:      'Poppins_600SemiBold',
+  rajdhani:      'Poppins_500Medium',      // Body text
+  rajdhaniBold:  'Poppins_700Bold',        // Display headings
 } as const;
 
 export const Radius = {

@@ -54,7 +54,7 @@ export default function BadgeShelf({ earnedBadges, onBadgePress }: BadgeShelfPro
                 {earned ? (
                   <MaterialCommunityIcons name={badge.icon as any} size={20} color={badge.color} />
                 ) : (
-                  <MaterialCommunityIcons name="lock" size={16} color={Colors.muted} />
+                  <MaterialCommunityIcons name="lock" size={16} color={Colors.dim} />
                 )}
               </View>
               <Text
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   cardLocked: {
     borderColor: Colors.border,
     backgroundColor: Colors.bgDeep,
-    opacity: 0.4,
+    opacity: 0.65,
   },
   iconCircle: {
     width: 38,

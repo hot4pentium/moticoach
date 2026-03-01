@@ -5,19 +5,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import {
   useFonts,
-  Orbitron_400Regular,
-  Orbitron_700Bold,
-  Orbitron_900Black,
-} from '@expo-google-fonts/orbitron';
-import {
-  JetBrainsMono_400Regular,
-  JetBrainsMono_600SemiBold,
-} from '@expo-google-fonts/jetbrains-mono';
-import {
-  Rajdhani_400Regular,
-  Rajdhani_600SemiBold,
-  Rajdhani_700Bold,
-} from '@expo-google-fonts/rajdhani';
+  Poppins_300Light,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold,
+} from '@expo-google-fonts/poppins';
 
 import Navigation from './src/navigation';
 import { CoachProvider } from './src/context/CoachContext';
@@ -27,14 +21,12 @@ import XpToastWidget from './src/components/XpToastWidget';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    Orbitron_400Regular,
-    Orbitron_700Bold,
-    Orbitron_900Black,
-    JetBrainsMono_400Regular,
-    JetBrainsMono_600SemiBold,
-    Rajdhani_400Regular,
-    Rajdhani_600SemiBold,
-    Rajdhani_700Bold,
+    Poppins_300Light,
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
   });
 
   if (!fontsLoaded) {

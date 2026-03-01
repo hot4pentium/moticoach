@@ -18,6 +18,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useCoach } from '../context/CoachContext';
+import { useNavigation } from '@react-navigation/native';
 import { Colors, Fonts, Gradients, HeroText, Radius, Spacing } from '../theme';
 import BadgeUnlockModal from '../components/BadgeUnlockModal';
 import LogoMark from '../components/LogoMark';
@@ -124,7 +125,8 @@ function isToday(date: Date): boolean {
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function SupporterHomeScreen() {
-  const { user, role, teamCode } = useAuth();
+  const navigation                      = useNavigation<any>();
+  const { user, role, teamCode }        = useAuth();
   const { pendingBadge, clearPendingBadge, earnedBadges, badgeIcon, badgeColor, coachSport } = useCoach();
 
   const [selectedEvent,   setSelectedEvent]   = useState<TeamEvent | null>(null);
@@ -135,7 +137,9 @@ export default function SupporterHomeScreen() {
   const [teamName,        setTeamName]        = useState('YOUR TEAM');
   const [selectedBadge,   setSelectedBadge]   = useState<Badge | null>(null);
 
-  const roleTag = role === 'athlete' ? 'ATHLETE DASHBOARD' : 'SUPPORTER DASHBOARD';
+  const roleTag = role === 'athlete' ? 'ATHLETE DASHBOARD'
+    : role === 'staff' ? 'STAFF DASHBOARD'
+    : 'SUPPORTER DASHBOARD';
 
   useEffect(() => {
     if (!user) return;
@@ -151,7 +155,10 @@ export default function SupporterHomeScreen() {
     }).catch(() => {});
   }, [teamCode]);
 
-  const handleAvatarPress = () => setProfileOpen(true);
+  const handleAvatarPress = () => {
+    if (role === 'athlete') navigation.navigate('AthleteProfile');
+    else setProfileOpen(true);
+  };
 
   const openEvent = useCallback((event: TeamEvent) => {
     setSelectedEvent(event);
@@ -256,6 +263,9 @@ export default function SupporterHomeScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Game Day Live */}
+        <GameDayLiveCard />
+
         <View style={styles.sectionDivider} />
 
         {/* Schedule */}
@@ -283,7 +293,7 @@ export default function SupporterHomeScreen() {
         <View style={styles.sectionDivider} />
 
         {/* Team Access Grid */}
-        <TeamAccessGrid role={role} />
+        <TeamAccessGrid role={role} navigation={navigation} />
 
         <View style={{ height: 32 }} />
         </View>
@@ -330,28 +340,43 @@ export default function SupporterHomeScreen() {
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
-const TEAM_TOOLS = [
-  { label: 'Roster',     sub: 'View the team',     icon: 'people-outline'    as IoniconsName, color: Colors.blue,   athleteOnly: false, locked: false },
-  { label: 'Playbook',   sub: 'Study the plays',   icon: 'easel-outline'     as IoniconsName, color: Colors.cyan,   athleteOnly: false, locked: false },
-  { label: 'My Stats',   sub: 'Your performance',  icon: 'bar-chart-outline' as IoniconsName, color: Colors.green,  athleteOnly: true,  locked: false },
-  { label: 'Highlights', sub: 'Coming soon',       icon: 'film-outline'      as IoniconsName, color: Colors.purple, athleteOnly: false, locked: true  },
+type ToolDef = { label: string; sub: string; icon: IoniconsName; color: string; screen?: string; locked: boolean };
+
+const SUPPORTER_TOOLS: ToolDef[] = [
+  { label: 'Roster',     sub: 'View the team',     icon: 'people-outline',    color: Colors.blue,   screen: 'Roster',    locked: false },
+  { label: 'Playbook',   sub: 'Study the plays',   icon: 'easel-outline',     color: Colors.cyan,   screen: 'Playmaker', locked: false },
+  { label: 'My Stats',   sub: 'Your performance',  icon: 'bar-chart-outline', color: Colors.green,  screen: 'AthleteProfile', locked: false },
+  { label: 'Highlights', sub: 'Coming soon',       icon: 'film-outline',      color: Colors.purple, locked: true  },
 ];
 
-function TeamAccessGrid({ role }: { role: string | null }) {
+const STAFF_TOOLS: ToolDef[] = [
+  { label: 'Playmaker',    sub: 'Build plays & formations',   icon: 'easel-outline',     color: Colors.cyan,   screen: 'Playmaker',        locked: false },
+  { label: 'Roster',       sub: 'Manage your players',        icon: 'people-outline',    color: Colors.blue,   screen: 'Roster',           locked: false },
+  { label: 'Stat Tracker', sub: 'Record & review team stats', icon: 'bar-chart-outline', color: Colors.green,  screen: 'StatTrackerSetup', locked: false },
+  { label: 'Prep Book',    sub: 'Game-day preparation',       icon: 'book-outline',      color: Colors.amber,  screen: 'PrepBook',         locked: false },
+  { label: 'Highlights',   sub: 'Review & share moments',     icon: 'film-outline',      color: Colors.purple, locked: true  },
+];
+
+function TeamAccessGrid({ role, navigation }: { role: string | null; navigation: any }) {
+  const isStaff = role === 'staff';
+  const tools   = isStaff ? STAFF_TOOLS : SUPPORTER_TOOLS;
+  const label   = isStaff ? 'STAFF TOOLS' : 'TEAM ACCESS';
   return (
     <View style={gridStyles.section}>
       <View style={gridStyles.header}>
-        <Text style={gridStyles.headerLabel}>TEAM ACCESS</Text>
+        <Text style={gridStyles.headerLabel}>{label}</Text>
       </View>
       <View style={gridStyles.grid}>
-        {TEAM_TOOLS.map(tool => {
-          const isLocked = tool.locked || (tool.athleteOnly && role !== 'athlete');
+        {tools.map(tool => {
+          const isLocked = tool.locked;
+          const onPress = !isLocked && tool.screen ? () => navigation.navigate(tool.screen!) : undefined;
           return (
             <TouchableOpacity
               key={tool.label}
               style={[gridStyles.card, isLocked && gridStyles.cardLocked]}
               activeOpacity={isLocked ? 0.7 : 0.78}
               disabled={isLocked}
+              onPress={onPress}
             >
               <View style={[gridStyles.accentBar, { backgroundColor: isLocked ? Colors.muted : tool.color }]} />
               <View style={[gridStyles.iconWrap, { backgroundColor: isLocked ? Colors.bgDeep : `${tool.color}18` }]}>
@@ -372,6 +397,48 @@ function TeamAccessGrid({ role }: { role: string | null }) {
     </View>
   );
 }
+
+// ─── Game Day Live Card ────────────────────────────────────────────────────────
+
+function GameDayLiveCard() {
+  return (
+    <View style={gdlStyles.card}>
+      <View style={gdlStyles.accent} />
+      <View style={gdlStyles.body}>
+        <View style={gdlStyles.titleRow}>
+          <View style={gdlStyles.liveDot} />
+          <Text style={gdlStyles.title}>GAME DAY LIVE</Text>
+        </View>
+        <Text style={gdlStyles.sub}>Real-time scores & updates during games</Text>
+        <View style={gdlStyles.comingSoon}>
+          <Ionicons name="flash-outline" size={11} color={Colors.amber} />
+          <Text style={gdlStyles.comingSoonText}>COMING SOON</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const gdlStyles = StyleSheet.create({
+  card: {
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    overflow: 'hidden' as any,
+    opacity: 0.75,
+  },
+  accent:       { height: 3, backgroundColor: Colors.amber, width: '100%' },
+  body:         { padding: Spacing.md, gap: 4 },
+  titleRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  liveDot:      { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.amber, opacity: 0.5 },
+  title:        { fontFamily: Fonts.monoBold, fontSize: 13, color: Colors.text, letterSpacing: 1.5 },
+  sub:          { fontFamily: Fonts.rajdhani, fontSize: 13, color: Colors.dim },
+  comingSoon:   { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  comingSoonText: { fontFamily: Fonts.mono, fontSize: 9, color: Colors.amber, letterSpacing: 1 },
+});
 
 const gridStyles = StyleSheet.create({
   section:     { paddingHorizontal: Spacing.lg, paddingTop: 4 },
@@ -546,8 +613,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bg,
-    backgroundImage: 'radial-gradient(rgba(37,99,235,0.13) 1.5px, transparent 1.5px)' as any,
-    backgroundSize: '22px 22px' as any,
+    backgroundImage: "url('/dashboard-bg.svg')" as any,
+    backgroundSize: 'cover' as any,
+    backgroundPosition: 'center' as any,
+    backgroundRepeat: 'no-repeat' as any,
   },
   scroll: { flex: 1 },
 
@@ -567,7 +636,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
   },
   exitBtn:     { paddingHorizontal: 8, paddingVertical: 3, marginLeft: 2 },
-  exitBtnText: { fontSize: 15, color: Colors.muted },
+  exitBtnText: { fontSize: 24, color: Colors.dim },
 
   // Hero — matches DashboardScreen exactly
   hero: {
@@ -577,13 +646,11 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.md,
     marginTop: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: 60,
-    minHeight: 220,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    minHeight: 160,
     gap: Spacing.xl,
     borderRadius: 28,
-    borderBottomLeftRadius: 72,
-    borderBottomRightRadius: 72,
     boxShadow: '0 16px 48px rgba(21,101,192,0.45), 0 4px 16px rgba(0,0,0,0.22)' as any,
   },
   heroLeft: { flex: 1 },
@@ -632,19 +699,18 @@ const styles = StyleSheet.create({
   },
   sportBadgeText: { fontFamily: Fonts.mono, fontSize: 9, color: HeroText.secondary, letterSpacing: 1 },
 
-  avatarWrap: { position: 'relative', width: 100, height: 100 },
+  avatarWrap: { position: 'relative', flex: 1, alignSelf: 'stretch' },
   avatarCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
+    flex: 1,
+    borderRadius: Radius.lg,
+    borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.6)',
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  avatarImage: { width: 100, height: 100 },
+  avatarImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   badgeOverlay: {
     position: 'absolute',
     bottom: -4,

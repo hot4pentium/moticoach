@@ -2,6 +2,8 @@
 
 React Native / Expo PWA for sports coaching. TypeScript throughout.
 
+> **At the start of each session, read `agents.md` (project root) for current work state.**
+
 ## Run
 ```
 npm start        # Expo dev server
@@ -38,7 +40,7 @@ Key values:
 - `Colors.bg` #0d1b2e, `Colors.bgDeep` #081525, `Colors.card`, `Colors.border`, `Colors.border2`
 - `Colors.text`, `Colors.dim`, `Colors.muted`
 - `Colors.cyan` (primary accent), `.amber`, `.green`, `.red`, `.blue`, `.purple`
-- `Fonts.orbitron` (display), `Fonts.mono` (JetBrains Mono, data/labels), `Fonts.rajdhani` (body), `Fonts.rajdhaniBold`, `Fonts.monoBold`
+- `Fonts.orbitron` (display/numbers), `Fonts.mono` (labels/data), `Fonts.rajdhani` (body), `Fonts.rajdhaniBold`, `Fonts.monoBold` — **all map to Poppins weights** (installed via `@expo-google-fonts/poppins`)
 - `Spacing.xs/sm/md/lg/xl/xxl` = 4/8/12/16/20/24
 - `Radius.sm/md/lg/xl/full` = 8/12/18/24/999
 - `Gradients.hero` — `['#42a5f5', '#1565c0']` blue gradient used on all hero panels
@@ -50,13 +52,17 @@ Auth gate drives all routing — no manual navigation calls for auth transitions
 - `!user` on web → `LandingScreen` (or `DemoShell` if showDemo, or `AuthScreen` if showAuth)
 - `!user` on native → `AuthScreen` directly
 - `user && !role` → `RoleSelectScreen`
-- `role === 'coach' | 'staff'` → `CoachStack` (Dashboard, Chat, Tools tabs + modal stack)
-- `role === 'supporter' | 'athlete'` → `SupporterStack` (Home, Chat tabs)
+- `role === 'coach'` → `CoachTabs` (Dashboard, Chat, Stats tabs + modal stack)
+- `role === 'athlete'` → `AthleteNavigator` (tab-free single-screen stack — just `AthleteProfileScreen`)
+- `role === 'supporter' | 'staff'` → `SupporterStack` (Home + Chat tabs)
 
 `AuthScreen` has optional `onBack?: () => void` prop — renders "← Back" button only when provided (web flow only).
 
-Modal stack screens (both stacks): DMList, DMConversation, NewDM.
-Modal stack screens (coach only): Roster, StatTrackerSetup, StatTrackerLive, StatTrackerSummary, Playmaker, PrepBook, PlayEditor.
+**CoachTabs** modal stack screens: Roster, StatTrackerSetup, StatTrackerLive, StatTrackerSummary, Playmaker, PrepBook, PlayEditor, DMList, DMConversation, NewDM.
+
+**SupporterStack** screens: SupporterTabs (Home + Chat), DMList, DMConversation, NewDM, AthleteProfile, plus all staff coaching screens (Roster, Playmaker, PrepBook, PlayEditor, StatTrackerSetup/Live/Summary, Highlights). Staff screens are reachable by navigation but only surfaced in the tools grid when `role === 'staff'`.
+
+**AthleteNavigator** — no tabs, no bottom bar. Single screen: `AthleteHome` (AthleteProfileScreen). Navigation to Chat is removed; athletes send messages via the inline Team Comms section.
 
 Navigate with `navigation.navigate('ScreenName', { params })`.
 
@@ -64,10 +70,10 @@ All dashboards have a `⏻` sign-out button in the header (calls `signOut(auth)`
 
 ## User Roles
 Four roles: `coach` | `staff` | `supporter` | `athlete`
-- **Coach** — claims an admin-provisioned team via teamCode. All teams are created by the org admin; coaches never self-generate a code. Full access, runs stat tracker, manages roster.
-- **Staff** — promoted from supporter by coach (from roster card), can run stat tracker
-- **Supporter** (parent) — joins via team code. Gets access to the team hub (schedule, roster, badges, chat).
-- **Athlete** — joins via team code. Same hub as supporter + their own stats tile.
+- **Coach** — claims an admin-provisioned team via teamCode. Full access: stat tracker, roster management, Playmaker, PrepBook, team settings (name/avatar/badge).
+- **Staff** — promoted from supporter by coach (from roster card). Routes to `SupporterStack` (not CoachTabs). Gets STAFF DASHBOARD in `SupporterHomeScreen` with full coaching tools (Playmaker, Roster edit, Stat Tracker, Prep Book). **Cannot**: manage team settings, transfer coach ownership, or delete the team.
+- **Supporter** (parent) — joins via team code. Gets SUPPORTER DASHBOARD: schedule, roster (view), playbook (view), badges, inline chat.
+- **Athlete** — joins via team code. Gets `AthleteNavigator` (tab-free). Full profile page with inline team chat (send to whole team), schedule, stats, badges.
 - Independent athlete tracking by supporter = paid feature (`isPaid` gate)
 - Role stored in Firestore `users/{uid}.role` — AuthContext reads this on login
 
@@ -145,6 +151,7 @@ teams/{teamCode}
   avatarUrl?: string          ← team logo (coach-uploadable)
   badgeIcon?: string          ← MaterialCommunityIcons icon name
   badgeColor?: string         ← hex color
+  trackingMode?: 'individual' | 'team'  ← controls AthleteProfileScreen stats display
 
 teams/{teamCode}/events/{eventId}
   type, title, date, time, location, published
@@ -204,25 +211,59 @@ The hub lives in Firestore under `teams/{teamCode}` and is **live the moment adm
 - Sizes: `sm` (headers, 60px), `md` (footer, 72px), `lg` (auth screen, 90px)
 - Used in: `DashboardScreen`, `SupporterHomeScreen`, `ChatScreen` headers (sm), `AuthScreen` brand (lg), `LandingScreen` nav + footer (sm/md)
 
-## Dashboard Layout (Coach & Supporter/Athlete)
-Both dashboards share the same visual structure — role-based access gates what is shown.
+## Dashboard Layout (Coach, Supporter & Staff)
 
-**Shared layout:**
-1. **Header** — LeagueMatrix logo + `⏻` sign-out
-2. **Hero** (`Gradients.hero` blue gradient, `borderBottomLeftRadius/RightRadius: 72`):
-   - Left: role tag, team name, team code chip, sport badge
-   - Right: tappable avatar circle + team badge icon overlay (`badgeIcon`/`badgeColor` from CoachContext)
-3. **BadgeShelf** — tap any badge to show detail modal
-4. **Next Event card** — color-accented, tappable → event sheet
-5. **Schedule** — current week row + expand/navigate to full calendar
-6. **Tools grid** — 2-col card grid (see below)
+**Coach (`DashboardScreen`)** — accessed via `CoachTabs`:
+1. Header — LeagueMatrix logo + `⏻` sign-out
+2. Hero (`Gradients.hero`, avatar tap → `TeamSettingsSheet`)
+3. BadgeShelf
+4. Next Event card → EventPreviewSheet
+5. Schedule (week row → SEE FULL CALENDAR navigates to CalendarScreen)
+6. Tools grid ("COACH TOOLS"): Playmaker, Roster, Stat Tracker, Prep Book, Highlights
 
-**Coach tools (`DashboardScreen`):** Playmaker, Roster, Stat Tracker, Prep Book, Highlights
-**Supporter/Athlete tools (`SupporterHomeScreen`):** Roster (view), Playbook (view), My Stats (athlete only), Highlights (locked)
+**Supporter/Staff (`SupporterHomeScreen`)** — accessed via `SupporterStack`:
+1. Header — LeagueMatrix logo + `⏻` sign-out
+2. Hero (`Gradients.hero`): role tag = `STAFF DASHBOARD` / `SUPPORTER DASHBOARD` / `ATHLETE DASHBOARD`; avatar tap → ProfileSheet (for supporter/staff) or navigate AthleteProfile (athlete)
+3. BadgeShelf
+4. Next Event card → EventSheet
+5. **Game Day Live card** — amber-accented placeholder card ("COMING SOON"), sits between next event and schedule
+6. Schedule (expandable 4 weeks, DayCard tappable → EventSheet)
+7. Tools grid:
+   - **Staff** ("STAFF TOOLS"): Playmaker, Roster (edit), Stat Tracker, Prep Book, Highlights
+   - **Supporter** ("TEAM ACCESS"): Roster (view), Playbook (view), My Stats (athlete only), Highlights (locked)
+
+Both use `maxWidth: 800, alignSelf: 'center'` inner wrapper for wide-screen centering.
+
+## Athlete Profile Screen (`src/screens/AthleteProfileScreen.tsx`)
+This is the **athlete's entire app** — the root screen of `AthleteNavigator` (no tabs, no bottom nav). Also accessible as a modal from `SupporterHomeScreen` (My Stats tool).
+
+**Header:** `[🏠 HOME (when canGoBack is false) / ← BACK]` · `MY PROFILE` · `[⚙ settings | ⏻ sign-out]`
+- `⏻` shows `Alert.alert` confirmation before calling `signOut(auth)`
+- Content constrained to `maxWidth: 800, alignSelf: 'center'` for wide screens
+
+**Sections (top to bottom):**
+1. **Hero card** (`Gradients.hero`, `borderRadius: 28`, `overflow: 'hidden'`):
+   - Avatar (tappable → file picker → uploads to `avatars/{uid}`) + camera chip
+   - Text stack: displayName, teamName, JERSEY/POS chips, sport badge
+   - Team badge watermark: `badgeIcon`/`badgeColor` from CoachContext at 50% opacity, `alignSelf: 'stretch'` for vertical centering
+2. **Roster Spot card** — jersey #, position, ACTIVE status pill, team/sport footer
+3. **Season Stats card** — conditional on `teams/{teamCode}.trackingMode`:
+   - `'individual'` (default): sport-specific columns from `SPORT_STATS` map, placeholder "—"
+   - `'team'`: blue "Team stats mode" banner + Games/Wins columns
+4. **Achievements** — `<BadgeShelf earnedBadges={earnedBadges} onBadgePress={...} />`
+5. **Schedule** — expandable calendar: `WeekRow`/`DayCard` (Mon–Sun strip). **DayCard is a `TouchableOpacity`** — tapping an event opens `EventSheet` (slide-up modal with type badge, title, opponent, time, location). "SEE FULL CALENDAR ▼" toggles 3 additional weeks.
+6. **Team Comms** — live `onSnapshot` on `teamChats/{teamCode}/messages` (last 20, desc). Shows 3 by default, "SHOW MORE (N) ▼" expands. Inline `TextInput` + send button — athlete sends to whole team only (no DMs, no separate chat screen).
+7. **Quick Access** — Playbook + Highlights (locked/coming soon)
+8. **Modals** — `EventSheet` (calendar taps), `ProfileSheet` (settings gear)
+
+**Key state:** `avatarUrl`, `teamName`, `trackingMode`, `gamesTracked`, `calExpanded`, `messages`, `commsExpanded`, `chatText`, `sending`, `settingsOpen`, `selectedBadge`, `selectedEvent`
+
+**Role color map** (used in Team Comms): `coach=cyan`, `staff=blue`, `supporter=amber`, `athlete=green`
 
 ## Avatar Upload & Profile Settings
 - **Coach**: tap avatar circle in hero → opens `TeamSettingsSheet` (avatar upload + team badge + notification prefs)
-- **Supporter/Athlete**: tap avatar circle in hero → opens `ProfileSheet` (avatar upload + notification prefs)
+- **Supporter**: tap avatar circle in hero → opens `ProfileSheet` (avatar upload + notification prefs)
+- **Athlete**: avatar tap in `SupporterHomeScreen` hero → navigates to `AthleteProfile`; gear icon in AthleteProfileScreen header → opens `ProfileSheet`; avatar in AthleteProfile hero → file picker directly
 - Avatar uploads to Firebase Storage `avatars/{uid}`, URL saved to `users/{uid}.avatarUrl`
 - Coach team identity (`avatarUrl`, `badgeIcon`, `badgeColor`) stored at `teams/{teamCode}` (editable via TeamSettingsSheet)
 - **All settings save immediately on tap** — both sheets show a header status line: `SAVES AUTOMATICALLY` (muted, always visible) that flashes `SAVED` (green) for 1.5s after each change. Implemented with `savedAt: number | null` state + `useRef` timer in each component.

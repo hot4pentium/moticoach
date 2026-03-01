@@ -327,7 +327,7 @@ export default function DashboardScreen() {
             style={styles.expandRow}
             onPress={() => navigation.navigate('Calendar')}
           >
-            <Text style={[styles.expandText, { color: ds(Colors.cyan) }]}>
+            <Text style={styles.expandText}>
               SEE FULL CALENDAR →
             </Text>
           </TouchableOpacity>
@@ -472,8 +472,8 @@ const toolGridStyles = StyleSheet.create({
   },
   headerLabel: {
     fontFamily: Fonts.mono,
-    fontSize: 9,
-    color: Colors.dim,
+    fontSize: 13,
+    color: Colors.text,
     letterSpacing: 2,
   },
   grid: {
@@ -723,9 +723,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bg,
-    // Web: subtle dot-grid texture
-    backgroundImage: 'radial-gradient(rgba(37,99,235,0.13) 1.5px, transparent 1.5px)' as any,
-    backgroundSize: '22px 22px' as any,
+    backgroundImage: "url('/dashboard-bg.svg')" as any,
+    backgroundSize: 'cover' as any,
+    backgroundPosition: 'center' as any,
+    backgroundRepeat: 'no-repeat' as any,
   },
   scroll: { flex: 1 },
 
@@ -773,13 +774,11 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.md,
     marginTop: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: 60,
-    minHeight: 220,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    minHeight: 160,
     gap: Spacing.xl,
     borderRadius: 28,
-    borderBottomLeftRadius: 72,
-    borderBottomRightRadius: 72,
     boxShadow: '0 16px 48px rgba(21,101,192,0.45), 0 4px 16px rgba(0,0,0,0.22)' as any,
   },
   heroLeft: {},
@@ -791,14 +790,13 @@ const styles = StyleSheet.create({
   },
   avatarWrap: {
     position: 'relative',
-    width: 100,
-    height: 100,
+    flex: 1,
+    alignSelf: 'stretch',
   },
   avatarCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
+    flex: 1,
+    borderRadius: Radius.lg,
+    borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.6)',
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
@@ -806,8 +804,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   avatarImage: {
-    width: 100,
-    height: 100,
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   badgeOverlay: {
     position: 'absolute',
@@ -956,8 +955,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: Fonts.mono,
-    fontSize: 9,
-    color: Colors.dim,
+    fontSize: 13,
+    color: Colors.text,
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
@@ -974,8 +973,8 @@ const styles = StyleSheet.create({
   },
   expandText: {
     fontFamily: Fonts.mono,
-    fontSize: 9,
-    color: Colors.cyan,
+    fontSize: 13,
+    color: '#000000',
     letterSpacing: 1.5,
   },
 
@@ -990,8 +989,8 @@ const styles = StyleSheet.create({
   },
   weekLabelText: {
     fontFamily: Fonts.mono,
-    fontSize: 8,
-    color: Colors.muted,
+    fontSize: 11,
+    color: '#000000',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
@@ -1017,14 +1016,14 @@ const styles = StyleSheet.create({
   dayCardBar: { width: '100%', height: 2, marginBottom: 6 },
   dayCardWeekday: {
     fontFamily: Fonts.mono,
-    fontSize: 7,
-    color: Colors.muted,
+    fontSize: 10,
+    color: Colors.dim,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   dayCardMonth: {
     fontFamily: Fonts.mono,
-    fontSize: 7,
+    fontSize: 10,
     color: Colors.dim,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1038,14 +1037,14 @@ const styles = StyleSheet.create({
   },
   dayCardType: {
     fontFamily: Fonts.mono,
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   dayCardOpp: {
     fontFamily: Fonts.mono,
-    fontSize: 6,
+    fontSize: 9,
     color: Colors.amber,
     marginTop: 1,
     maxWidth: 60,
@@ -1054,7 +1053,7 @@ const styles = StyleSheet.create({
   dayCardPlus: {
     fontFamily: Fonts.mono,
     fontSize: 16,
-    color: Colors.muted,
+    color: Colors.dim,
     marginTop: 4,
   },
   dayPrepBar: {
@@ -1170,8 +1169,8 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   exitBtnText: {
-    fontSize: 15,
-    color: Colors.muted,
+    fontSize: 24,
+    color: Colors.dim,
   },
 
   // Badge detail full-screen overlay
