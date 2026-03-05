@@ -24,7 +24,8 @@ import { Badge } from '../lib/badges';
 import TeamSettingsSheet from '../components/TeamSettingsSheet';
 import InstallPromptBanner from '../components/InstallPromptBanner';
 import { signOut } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { collection, getDocs, orderBy, query, limit } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 import { useCoach } from '../context/CoachContext';
 import { useAuth } from '../context/AuthContext';
 import { TEAM_CODE } from './RosterScreen';
@@ -168,6 +169,7 @@ export default function DashboardScreen() {
   const [events, setEvents] = useState<TeamEvent[]>(INITIAL_EVENTS);
   const [selectedEvent, setSelectedEvent] = useState<TeamEvent | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [prepPickerVisible, setPrepPickerVisible] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
   // Onboarding — keyed per user so each new account sees it fresh
   const onboarding = useOnboarding(`dashboard_${user?.uid ?? 'anon'}`, 2);
@@ -347,7 +349,7 @@ export default function DashboardScreen() {
         <View style={styles.sectionDivider} />
 
         {/* Tools Grid */}
-        <ToolsGrid />
+        <ToolsGrid onPickerOpen={() => setPrepPickerVisible(true)} />
 
         <View style={{ height: 32 }} />
           </View>
@@ -396,6 +398,14 @@ export default function DashboardScreen() {
         onUpdate={handleUpdateEvent}
       />
 
+      {/* Prep Book Event Picker */}
+      <PrepBookPickerSheet
+        visible={prepPickerVisible}
+        onClose={() => setPrepPickerVisible(false)}
+        events={events}
+        navigation={navigation}
+      />
+
       {/* Onboarding tooltips */}
       {!onboarding.isDone && currentTip && (
         <OnboardingTooltip
@@ -419,14 +429,15 @@ export default function DashboardScreen() {
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 const DASH_TOOLS = [
-  { label: 'Playmaker',    sub: 'Build plays & formations',   icon: 'easel-outline'     as IoniconsName, color: Colors.cyan,   screen: 'Playmaker',        locked: false },
-  { label: 'Roster',       sub: 'Manage your players',        icon: 'people-outline'    as IoniconsName, color: Colors.blue,   screen: 'Roster',           locked: false },
-  { label: 'Stat Tracker', sub: 'Record & review team stats', icon: 'bar-chart-outline' as IoniconsName, color: Colors.green,  screen: 'StatTrackerSetup', locked: false },
-  { label: 'Prep Book',    sub: 'Game-day preparation steps', icon: 'book-outline'      as IoniconsName, color: Colors.amber,  screen: 'PrepBook',         locked: false },
-  { label: 'Highlights',   sub: 'Review & share key moments', icon: 'film-outline'      as IoniconsName, color: Colors.purple, screen: 'Highlights',       locked: false },
+  { label: 'Playmaker',    sub: 'Build plays & formations',   icon: 'easel-outline'     as IoniconsName, color: Colors.cyan,   screen: 'Playmaker',        locked: false, picker: false },
+  { label: 'Roster',       sub: 'Manage your players',        icon: 'people-outline'    as IoniconsName, color: Colors.blue,   screen: 'Roster',           locked: false, picker: false },
+  { label: 'Stat Tracker', sub: 'Record & review team stats', icon: 'bar-chart-outline' as IoniconsName, color: Colors.green,  screen: 'StatTrackerSetup', locked: false, picker: false },
+  { label: 'Prep Book',    sub: 'Prep for a specific event',  icon: 'book-outline'      as IoniconsName, color: Colors.amber,  screen: 'PrepBook',         locked: false, picker: true  },
+  { label: 'Highlights',   sub: 'Review & share key moments', icon: 'film-outline'      as IoniconsName, color: Colors.purple, screen: 'Highlights',       locked: false, picker: false },
+  { label: 'Game Day',     sub: 'Live taps & fan engagement', icon: 'radio-outline'     as IoniconsName, color: Colors.amber,  screen: 'GameDayLive',      locked: false, picker: false },
 ];
 
-function ToolsGrid() {
+function ToolsGrid({ onPickerOpen }: { onPickerOpen: () => void }) {
   const navigation = useNavigation<any>();
   return (
     <View style={toolGridStyles.section}>
@@ -439,7 +450,10 @@ function ToolsGrid() {
             key={tool.label}
             style={[toolGridStyles.card, tool.locked && toolGridStyles.cardLocked]}
             activeOpacity={tool.locked ? 0.7 : 0.78}
-            onPress={() => !tool.locked && tool.screen && navigation.navigate(tool.screen)}
+            onPress={() => {
+              if (tool.picker) { onPickerOpen(); return; }
+              if (!tool.locked && tool.screen) navigation.navigate(tool.screen);
+            }}
             disabled={tool.locked}
           >
             {/* Top accent bar */}
@@ -798,6 +812,286 @@ function EventPreviewSheet({
     </Modal>
   );
 }
+
+// ─── Prep Book Event Picker Sheet ────────────────────────────────────────────
+
+interface PrepBookEntry {
+  id: string;
+  eventTitle: string;
+  eventType: string;
+  completedAt: number; // Unix ms
+  completedSteps: number[];
+  [key: string]: any;
+}
+
+export function PrepBookPickerSheet({
+  visible, onClose, events, navigation,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  events: TeamEvent[];
+  navigation: any;
+}) {
+  const { teamCode } = useAuth();
+  const [recentEntries, setRecentEntries] = useState<PrepBookEntry[]>([]);
+  const [view, setView] = useState<'choice' | 'new' | 'previous'>('choice');
+
+  useEffect(() => {
+    if (visible) { setView('choice'); }
+    if (!visible || !teamCode) return;
+    getDocs(query(
+      collection(db, 'teams', teamCode, 'prepBookEntries'),
+      orderBy('completedAt', 'desc'),
+      limit(5),
+    )).then(snap => {
+      setRecentEntries(snap.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as any),
+        completedAt: (d.data().completedAt as any)?.toDate?.()?.getTime() ?? 0,
+      })));
+    }).catch(() => {});
+  }, [visible, teamCode]);
+
+  const pickableEvents = events
+    .filter(e => e.type === 'game' || e.type === 'practice')
+    .slice(0, 5);
+
+  function goPrep(eventType: string, eventTitle?: string) {
+    onClose();
+    navigation.navigate('PrepBook', { eventType, eventTitle: eventTitle ?? undefined });
+  }
+
+  function goReview(entry: PrepBookEntry) {
+    onClose();
+    navigation.navigate('PrepBook', { mode: 'review', entry });
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <View style={{ flex: 1, justifyContent: 'flex-end', alignItems: 'center' }}>
+        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
+        <View style={ppStyles.sheet}>
+          <View style={ppStyles.handle} />
+
+          {/* ── CHOICE VIEW ── */}
+          {view === 'choice' && (
+            <>
+              <View style={ppStyles.header}>
+                <View style={{ flex: 1 }}>
+                  <Text style={ppStyles.title}>PREP BOOK</Text>
+                  <Text style={ppStyles.sub}>What would you like to do?</Text>
+                </View>
+                <TouchableOpacity onPress={onClose} style={ppStyles.closeBtn}>
+                  <Ionicons name="close" size={20} color={Colors.dim} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={ppStyles.choiceGrid}>
+                {/* Start New */}
+                <TouchableOpacity style={ppStyles.choiceCard} onPress={() => setView('new')} activeOpacity={0.8}>
+                  <View style={[ppStyles.choiceIcon, { backgroundColor: `${Colors.amber}18` }]}>
+                    <Ionicons name="create-outline" size={28} color={Colors.amber} />
+                  </View>
+                  <Text style={[ppStyles.choiceLabel, { color: Colors.amber }]}>START NEW PREP</Text>
+                  <Text style={ppStyles.choiceSub}>Build a game or practice plan</Text>
+                  <View style={ppStyles.choiceArrow}>
+                    <Ionicons name="arrow-forward" size={14} color={Colors.amber} />
+                  </View>
+                </TouchableOpacity>
+
+                {/* Review Saved */}
+                <TouchableOpacity
+                  style={[ppStyles.choiceCard, recentEntries.length === 0 && ppStyles.choiceCardDim]}
+                  onPress={() => recentEntries.length > 0 && setView('previous')}
+                  activeOpacity={recentEntries.length > 0 ? 0.8 : 1}
+                >
+                  <View style={[ppStyles.choiceIcon, { backgroundColor: `${Colors.cyan}18` }]}>
+                    <Ionicons name="book-outline" size={28} color={recentEntries.length > 0 ? Colors.cyan : Colors.muted} />
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[ppStyles.choiceLabel, { color: recentEntries.length > 0 ? Colors.cyan : Colors.muted }]}>
+                      REVIEW SAVED
+                    </Text>
+                    {recentEntries.length > 0 && (
+                      <View style={ppStyles.countPill}>
+                        <Text style={ppStyles.countPillTxt}>{recentEntries.length}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={ppStyles.choiceSub}>
+                    {recentEntries.length > 0 ? 'View your previous prep entries' : 'No saved prep books yet'}
+                  </Text>
+                  {recentEntries.length > 0 && (
+                    <View style={ppStyles.choiceArrow}>
+                      <Ionicons name="arrow-forward" size={14} color={Colors.cyan} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+              <View style={{ height: Spacing.xl }} />
+            </>
+          )}
+
+          {/* ── NEW PREP VIEW ── */}
+          {view === 'new' && (
+            <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <View style={ppStyles.header}>
+                <TouchableOpacity onPress={() => setView('choice')} style={ppStyles.backChip}>
+                  <Ionicons name="chevron-back" size={14} color={Colors.cyan} />
+                  <Text style={ppStyles.backChipTxt}>BACK</Text>
+                </TouchableOpacity>
+                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                  <Text style={ppStyles.title}>SELECT EVENT</Text>
+                  <Text style={ppStyles.sub}>Choose an upcoming event to prep for</Text>
+                </View>
+                <TouchableOpacity onPress={onClose} style={ppStyles.closeBtn}>
+                  <Ionicons name="close" size={20} color={Colors.dim} />
+                </TouchableOpacity>
+              </View>
+
+              {pickableEvents.length > 0 && (
+                <View style={ppStyles.eventList}>
+                  {pickableEvents.map((ev, i) => {
+                    const color = TYPE_COLOR[ev.type];
+                    const label = TYPE_LABEL[ev.type];
+                    return (
+                      <TouchableOpacity
+                        key={ev.id}
+                        style={[ppStyles.eventRow, i > 0 && ppStyles.eventRowBorder]}
+                        onPress={() => goPrep(ev.type, ev.title)}
+                        activeOpacity={0.75}
+                      >
+                        <View style={[ppStyles.dot, { backgroundColor: color }]} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={ppStyles.eventTitle}>{ev.title}</Text>
+                          <Text style={ppStyles.eventMeta}>{ev.time}</Text>
+                        </View>
+                        <View style={[ppStyles.typeBadge, { backgroundColor: `${color}22`, borderColor: `${color}44` }]}>
+                          <Text style={[ppStyles.typeBadgeTxt, { color }]}>{label}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={Colors.dim} style={{ marginLeft: 4 }} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              <View style={ppStyles.dividerRow}>
+                <View style={ppStyles.dividerLine} />
+                <Text style={ppStyles.dividerTxt}>OR START WITHOUT AN EVENT</Text>
+                <View style={ppStyles.dividerLine} />
+              </View>
+
+              <View style={ppStyles.fallbackRow}>
+                <TouchableOpacity style={[ppStyles.fallbackBtn, { borderColor: Colors.amber }]} onPress={() => goPrep('game')} activeOpacity={0.8}>
+                  <Ionicons name="trophy-outline" size={16} color={Colors.amber} />
+                  <Text style={[ppStyles.fallbackBtnTxt, { color: Colors.amber }]}>GAME PREP</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[ppStyles.fallbackBtn, { borderColor: Colors.green }]} onPress={() => goPrep('practice')} activeOpacity={0.8}>
+                  <Ionicons name="fitness-outline" size={16} color={Colors.green} />
+                  <Text style={[ppStyles.fallbackBtnTxt, { color: Colors.green }]}>PRACTICE PLAN</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ height: Spacing.xl }} />
+            </ScrollView>
+          )}
+
+          {/* ── PREVIOUS VIEW ── */}
+          {view === 'previous' && (
+            <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
+              <View style={ppStyles.header}>
+                <TouchableOpacity onPress={() => setView('choice')} style={ppStyles.backChip}>
+                  <Ionicons name="chevron-back" size={14} color={Colors.cyan} />
+                  <Text style={ppStyles.backChipTxt}>BACK</Text>
+                </TouchableOpacity>
+                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                  <Text style={ppStyles.title}>SAVED PREP BOOKS</Text>
+                  <Text style={ppStyles.sub}>Tap any entry to review</Text>
+                </View>
+                <TouchableOpacity onPress={onClose} style={ppStyles.closeBtn}>
+                  <Ionicons name="close" size={20} color={Colors.dim} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={ppStyles.eventList}>
+                {recentEntries.map((entry, i) => {
+                  const color = entry.eventType === 'game' ? TYPE_COLOR.game
+                              : entry.eventType === 'practice' ? TYPE_COLOR.practice
+                              : Colors.purple;
+                  const label = entry.eventType === 'game' ? 'GAME'
+                              : entry.eventType === 'practice' ? 'TRAIN'
+                              : 'OTHER';
+                  const dateStr = entry.completedAt
+                    ? new Date(entry.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : '';
+                  const pct = entry.completedSteps?.length
+                    ? Math.round((entry.completedSteps.length / (entry.eventType === 'practice' ? 5 : 6)) * 100)
+                    : 0;
+                  return (
+                    <TouchableOpacity
+                      key={entry.id}
+                      style={[ppStyles.eventRow, i > 0 && ppStyles.eventRowBorder]}
+                      onPress={() => goReview(entry)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={[ppStyles.dot, { backgroundColor: color }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={ppStyles.eventTitle}>{entry.eventTitle}</Text>
+                        <Text style={ppStyles.eventMeta}>{dateStr}{pct > 0 ? `  ·  ${pct}%` : ''}</Text>
+                      </View>
+                      <View style={[ppStyles.typeBadge, { backgroundColor: `${color}22`, borderColor: `${color}44` }]}>
+                        <Text style={[ppStyles.typeBadgeTxt, { color }]}>{label}</Text>
+                      </View>
+                      <Ionicons name="eye-outline" size={16} color={Colors.dim} style={{ marginLeft: 4 }} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <View style={{ height: Spacing.xl }} />
+            </ScrollView>
+          )}
+
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const ppStyles = StyleSheet.create({
+  sheet:       { width: '100%', maxWidth: 600, backgroundColor: Colors.card, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl, paddingBottom: 32, borderTopWidth: 1, borderColor: Colors.border },
+  handle:      { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  header:      { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
+  title:       { fontFamily: Fonts.monoBold, fontSize: 13, color: Colors.text, letterSpacing: 0.5, marginBottom: 2 },
+  sub:         { fontFamily: Fonts.rajdhani, fontSize: 14, color: Colors.dim },
+  closeBtn:    { padding: Spacing.xs },
+  eventList:   { marginHorizontal: Spacing.lg, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg, overflow: 'hidden', marginBottom: Spacing.md },
+  eventRow:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
+  eventRowBorder: { borderTopWidth: 1, borderTopColor: Colors.border },
+  dot:         { width: 8, height: 8, borderRadius: 4 },
+  eventTitle:  { fontFamily: Fonts.rajdhaniBold, fontSize: 15, color: Colors.text },
+  eventMeta:   { fontFamily: Fonts.mono, fontSize: 11, color: Colors.dim, marginTop: 1 },
+  typeBadge:   { paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm, borderWidth: 1 },
+  typeBadgeTxt:{ fontFamily: Fonts.monoBold, fontSize: 10 },
+  dividerRow:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, marginBottom: Spacing.md },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerTxt:  { fontFamily: Fonts.mono, fontSize: 9, color: Colors.muted, marginHorizontal: Spacing.sm, letterSpacing: 0.3 },
+  fallbackRow: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.lg },
+  fallbackBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs, paddingVertical: 12, borderRadius: Radius.md, borderWidth: 1, backgroundColor: Colors.bg },
+  fallbackBtnTxt: { fontFamily: Fonts.monoBold, fontSize: 13 },
+  sectionHeader:  { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xs },
+  sectionLabel:   { fontFamily: Fonts.monoBold, fontSize: 10, color: Colors.muted, letterSpacing: 1 },
+  choiceGrid:     { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.lg, marginTop: Spacing.xs },
+  choiceCard:     { flex: 1, backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.lg, padding: Spacing.md, gap: 4 },
+  choiceCardDim:  { opacity: 0.5 },
+  choiceIcon:     { width: 48, height: 48, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.xs },
+  choiceLabel:    { fontFamily: Fonts.monoBold, fontSize: 12, letterSpacing: 0.5 },
+  choiceSub:      { fontFamily: Fonts.rajdhani, fontSize: 13, color: Colors.dim, lineHeight: 17 },
+  choiceArrow:    { marginTop: Spacing.sm },
+  countPill:      { backgroundColor: Colors.cyan, borderRadius: Radius.full, paddingHorizontal: 6, paddingVertical: 1 },
+  countPillTxt:   { fontFamily: Fonts.monoBold, fontSize: 10, color: Colors.bg },
+  backChip:       { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: `${Colors.cyan}18`, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: Radius.full, borderWidth: 1, borderColor: `${Colors.cyan}33` },
+  backChipTxt:    { fontFamily: Fonts.monoBold, fontSize: 10, color: Colors.cyan, letterSpacing: 0.5 },
+});
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 

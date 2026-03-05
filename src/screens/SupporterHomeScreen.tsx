@@ -25,7 +25,9 @@ import LogoMark from '../components/LogoMark';
 import BadgeShelf from '../components/BadgeShelf';
 import ProfileSheet from '../components/ProfileSheet';
 import InstallPromptBanner from '../components/InstallPromptBanner';
+import HypeCard, { HypeAthlete, HypeGame } from '../components/HypeCard';
 import { Badge } from '../lib/badges';
+import { PrepBookPickerSheet } from './DashboardScreen';
 
 // ─── Types & Constants ────────────────────────────────────────────────────────
 
@@ -86,6 +88,62 @@ const MOCK_EVENTS: TeamEvent[] = [
   { id: '6', type: 'game',     title: 'vs North Eagles',  opponent: 'North Eagles',  date: d(14), time: '11:00 AM', location: 'Central Stadium', playerCount: 18 },
 ];
 
+// ─── Mock Athletes ────────────────────────────────────────────────────────────
+
+const MOCK_ATHLETES: HypeAthlete[] = [
+  {
+    id: '1', firstName: 'Marcus', lastName: 'Reynolds',
+    jersey: '7', position: 'Forward', sport: 'soccer',
+    stats: [
+      { label: 'Goals', val: '12', accent: true },
+      { label: 'Assists', val: '7' },
+      { label: 'Games', val: '18' },
+      { label: 'Shot %', val: '86%', accent: true },
+    ],
+  },
+  {
+    id: '2', firstName: 'Jordan', lastName: 'Vance',
+    jersey: '11', position: 'Midfielder', sport: 'soccer',
+    stats: [
+      { label: 'Goals', val: '5', accent: true },
+      { label: 'Assists', val: '14' },
+      { label: 'Games', val: '18' },
+      { label: 'Pass %', val: '92%', accent: true },
+    ],
+  },
+  {
+    id: '3', firstName: 'Priya', lastName: 'Nair',
+    jersey: '3', position: 'Defender', sport: 'soccer',
+    stats: [
+      { label: 'Tackles', val: '34', accent: true },
+      { label: 'Clears', val: '21' },
+      { label: 'Games', val: '17' },
+      { label: 'Saves', val: '8', accent: true },
+    ],
+  },
+  {
+    id: '4', firstName: 'Leo', lastName: 'Marsh',
+    jersey: '1', position: 'Goalkeeper', sport: 'soccer',
+    stats: [
+      { label: 'Saves', val: '41', accent: true },
+      { label: 'Clean', val: '6' },
+      { label: 'Games', val: '18' },
+      { label: 'Save %', val: '78%', accent: true },
+    ],
+  },
+];
+
+// Derive team's upcoming games for the HYPE card back face
+const HYPE_GAMES: HypeGame[] = MOCK_EVENTS
+  .filter(e => e.type === 'game' && e.date >= new Date(new Date().setHours(0, 0, 0, 0)))
+  .slice(0, 3)
+  .map((e, i) => ({
+    title: e.title,
+    date:  `${MONTHS[e.date.getMonth()]} ${e.date.getDate()}`,
+    time:  e.time,
+    isHome: i % 2 === 0,
+  }));
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getMondayOfWeek(date: Date): Date {
@@ -131,17 +189,16 @@ export default function SupporterHomeScreen() {
   const { user, role, teamCode }        = useAuth();
   const { pendingBadge, clearPendingBadge, earnedBadges, badgeIcon, badgeColor, coachSport } = useCoach();
 
-  const [selectedEvent,   setSelectedEvent]   = useState<TeamEvent | null>(null);
-  const [sheetVisible,    setSheetVisible]    = useState(false);
-  const [calExpanded,     setCalExpanded]     = useState(false);
-  const [avatarUrl,       setAvatarUrl]       = useState('');
-  const [profileOpen,     setProfileOpen]     = useState(false);
-  const [teamName,        setTeamName]        = useState('YOUR TEAM');
-  const [selectedBadge,   setSelectedBadge]   = useState<Badge | null>(null);
+  const [selectedEvent,      setSelectedEvent]      = useState<TeamEvent | null>(null);
+  const [sheetVisible,       setSheetVisible]       = useState(false);
+  const [calExpanded,        setCalExpanded]        = useState(false);
+  const [avatarUrl,          setAvatarUrl]          = useState('');
+  const [profileOpen,        setProfileOpen]        = useState(false);
+  const [teamName,           setTeamName]           = useState('YOUR TEAM');
+  const [selectedBadge,      setSelectedBadge]      = useState<Badge | null>(null);
+  const [prepPickerVisible,  setPrepPickerVisible]  = useState(false);
 
-  const roleTag = role === 'athlete' ? 'ATHLETE DASHBOARD'
-    : role === 'staff' ? 'STAFF DASHBOARD'
-    : 'SUPPORTER DASHBOARD';
+  const roleTag = role === 'staff' ? 'STAFF DASHBOARD' : 'SUPPORTER DASHBOARD';
 
   useEffect(() => {
     if (!user) return;
@@ -157,10 +214,7 @@ export default function SupporterHomeScreen() {
     }).catch(() => {});
   }, [teamCode]);
 
-  const handleAvatarPress = () => {
-    if (role === 'athlete') navigation.navigate('AthleteProfile');
-    else setProfileOpen(true);
-  };
+  const handleAvatarPress = () => setProfileOpen(true);
 
   const openEvent = useCallback((event: TeamEvent) => {
     setSelectedEvent(event);
@@ -268,6 +322,9 @@ export default function SupporterHomeScreen() {
         {/* Game Day Live */}
         <GameDayLiveCard navigation={navigation} />
 
+        {/* Player HYPE Cards */}
+        <PlayerHypeCards teamCode={teamCode ?? ''} />
+
         <View style={styles.sectionDivider} />
 
         {/* Schedule */}
@@ -295,11 +352,19 @@ export default function SupporterHomeScreen() {
         <View style={styles.sectionDivider} />
 
         {/* Team Access Grid */}
-        <TeamAccessGrid role={role} navigation={navigation} />
+        <TeamAccessGrid role={role} navigation={navigation} onPrepPickerOpen={() => setPrepPickerVisible(true)} />
 
         <View style={{ height: 32 }} />
         </View>
       </ScrollView>
+
+      {/* Prep Book Picker */}
+      <PrepBookPickerSheet
+        visible={prepPickerVisible}
+        onClose={() => setPrepPickerVisible(false)}
+        events={MOCK_EVENTS}
+        navigation={navigation}
+      />
 
       {/* Badge Detail Modal */}
       {selectedBadge && (
@@ -342,24 +407,23 @@ export default function SupporterHomeScreen() {
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
-type ToolDef = { label: string; sub: string; icon: IoniconsName; color: string; screen?: string; locked: boolean };
+type ToolDef = { label: string; sub: string; icon: IoniconsName; color: string; screen?: string; locked: boolean; picker?: boolean };
 
 const SUPPORTER_TOOLS: ToolDef[] = [
-  { label: 'Roster',     sub: 'View the team',     icon: 'people-outline',    color: Colors.blue,   screen: 'Roster',    locked: false },
-  { label: 'Playbook',   sub: 'Study the plays',   icon: 'easel-outline',     color: Colors.cyan,   screen: 'Playmaker', locked: false },
-  { label: 'My Stats',   sub: 'Your performance',  icon: 'bar-chart-outline', color: Colors.green,  screen: 'AthleteProfile', locked: false },
-  { label: 'Highlights', sub: 'Coming soon',       icon: 'film-outline',      color: Colors.purple, locked: true  },
+  { label: 'Roster',     sub: 'View the team',   icon: 'people-outline', color: Colors.blue,   screen: 'Roster',    locked: false },
+  { label: 'Playbook',   sub: 'Study the plays', icon: 'easel-outline',  color: Colors.cyan,   screen: 'Playmaker', locked: false },
+  { label: 'Highlights', sub: 'Coming soon',     icon: 'film-outline',   color: Colors.purple, locked: true  },
 ];
 
 const STAFF_TOOLS: ToolDef[] = [
   { label: 'Playmaker',    sub: 'Build plays & formations',   icon: 'easel-outline',     color: Colors.cyan,   screen: 'Playmaker',        locked: false },
   { label: 'Roster',       sub: 'Manage your players',        icon: 'people-outline',    color: Colors.blue,   screen: 'Roster',           locked: false },
   { label: 'Stat Tracker', sub: 'Record & review team stats', icon: 'bar-chart-outline', color: Colors.green,  screen: 'StatTrackerSetup', locked: false },
-  { label: 'Prep Book',    sub: 'Game-day preparation',       icon: 'book-outline',      color: Colors.amber,  screen: 'PrepBook',         locked: false },
+  { label: 'Prep Book',    sub: 'Game-day preparation',       icon: 'book-outline',      color: Colors.amber,  screen: 'PrepBook',         locked: false, picker: true },
   { label: 'Highlights',   sub: 'Review & share moments',     icon: 'film-outline',      color: Colors.purple, locked: true  },
 ];
 
-function TeamAccessGrid({ role, navigation }: { role: string | null; navigation: any }) {
+function TeamAccessGrid({ role, navigation, onPrepPickerOpen }: { role: string | null; navigation: any; onPrepPickerOpen: () => void }) {
   const isStaff = role === 'staff';
   const tools   = isStaff ? STAFF_TOOLS : SUPPORTER_TOOLS;
   const label   = isStaff ? 'STAFF TOOLS' : 'TEAM ACCESS';
@@ -371,7 +435,10 @@ function TeamAccessGrid({ role, navigation }: { role: string | null; navigation:
       <View style={gridStyles.grid}>
         {tools.map(tool => {
           const isLocked = tool.locked;
-          const onPress = !isLocked && tool.screen ? () => navigation.navigate(tool.screen!) : undefined;
+          const onPress = isLocked ? undefined
+                        : tool.picker ? onPrepPickerOpen
+                        : tool.screen ? () => navigation.navigate(tool.screen!)
+                        : undefined;
           return (
             <TouchableOpacity
               key={tool.label}
@@ -399,6 +466,56 @@ function TeamAccessGrid({ role, navigation }: { role: string | null; navigation:
     </View>
   );
 }
+
+// ─── Player HYPE Cards ────────────────────────────────────────────────────────
+
+function PlayerHypeCards({ teamCode }: { teamCode: string }) {
+  return (
+    <View style={hypeStyles.section}>
+      <View style={hypeStyles.header}>
+        <Text style={hypeStyles.headerLabel}>PLAYER CARDS</Text>
+        <Text style={hypeStyles.headerSub}>Tap to flip · Cheer your athletes</Text>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={hypeStyles.strip}
+      >
+        {MOCK_ATHLETES.map(athlete => (
+          <HypeCard key={athlete.id} athlete={athlete} upcomingGames={HYPE_GAMES} teamCode={teamCode} />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+const hypeStyles = StyleSheet.create({
+  section: { marginTop: Spacing.md },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  headerLabel: {
+    fontFamily: Fonts.mono,
+    fontSize: 9,
+    color: Colors.dim,
+    letterSpacing: 2,
+  },
+  headerSub: {
+    fontFamily: Fonts.mono,
+    fontSize: 8,
+    color: Colors.muted,
+    letterSpacing: 0.5,
+  },
+  strip: {
+    paddingHorizontal: Spacing.lg,
+    gap: 10,
+    paddingBottom: 4,
+  },
+});
 
 // ─── Game Day Live Card ────────────────────────────────────────────────────────
 

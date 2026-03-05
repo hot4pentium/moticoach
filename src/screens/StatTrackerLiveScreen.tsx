@@ -256,69 +256,75 @@ export default function StatTrackerLiveScreen() {
 
       {/* Period bar */}
       <View style={styles.periodBar}>
-        <View style={styles.periodChip}>
-          <Text style={styles.periodChipText}>{periodLabel}</Text>
-        </View>
-        {isBaseball && (
-          <View style={[styles.roleChip, isMyTeamBatting ? styles.roleChipBat : styles.roleChipField]}>
-            <Text style={[styles.roleChipText, isMyTeamBatting ? styles.roleChipTextBat : styles.roleChipTextField]}>
-              {isMyTeamBatting ? '⚾ AT BAT' : '🧤 FIELD'}
+        <View style={styles.periodBarInner}>
+          <View style={styles.periodChip}>
+            <Text style={styles.periodChipText}>{periodLabel}</Text>
+          </View>
+          {isBaseball && (
+            <View style={[styles.roleChip, isMyTeamBatting ? styles.roleChipBat : styles.roleChipField]}>
+              <Text style={[styles.roleChipText, isMyTeamBatting ? styles.roleChipTextBat : styles.roleChipTextField]}>
+                {isMyTeamBatting ? '⚾ AT BAT' : '🧤 FIELD'}
+              </Text>
+            </View>
+          )}
+          {isBaseball && !isMyTeamBatting && (teamStats['pc'] ?? 0) > 0 && (
+            <View style={styles.pitchCountChip}>
+              <Text style={styles.pitchCountText}>{teamStats['pc']} PC</Text>
+            </View>
+          )}
+          <View style={[styles.liveChip, paused && styles.pausedChip]}>
+            <View style={[styles.liveDot, paused && styles.pausedDot]} />
+            <Text style={[styles.liveText, paused && styles.pausedText]}>
+              {paused ? 'PAUSED' : 'LIVE'}
             </Text>
           </View>
-        )}
-        {isBaseball && !isMyTeamBatting && (teamStats['pc'] ?? 0) > 0 && (
-          <View style={styles.pitchCountChip}>
-            <Text style={styles.pitchCountText}>{teamStats['pc']} PC</Text>
-          </View>
-        )}
-        <View style={[styles.liveChip, paused && styles.pausedChip]}>
-          <View style={[styles.liveDot, paused && styles.pausedDot]} />
-          <Text style={[styles.liveText, paused && styles.pausedText]}>
-            {paused ? 'PAUSED' : 'LIVE'}
-          </Text>
         </View>
       </View>
 
       {/* Scoreboard */}
       <View style={styles.scoreboard}>
-        <ScoreBlock
-          name={config.teamName.split(' ').slice(-1)[0].toUpperCase()}
-          score={homeScore}
-          onMinus={() => setHomeScore(s => Math.max(0, s - 1))}
-          onPlus={() => setHomeScore(s => s + 1)}
-        />
-        <Text style={styles.vs}>VS</Text>
-        <ScoreBlock
-          name={config.opponentName.split(' ').slice(-1)[0].toUpperCase()}
-          score={oppScore}
-          onMinus={() => setOppScore(s => Math.max(0, s - 1))}
-          onPlus={() => setOppScore(s => s + 1)}
-          right
-        />
+        <View style={styles.scoreboardInner}>
+          <ScoreBlock
+            name={config.teamName.split(' ').slice(-1)[0].toUpperCase()}
+            score={homeScore}
+            onMinus={() => setHomeScore(s => Math.max(0, s - 1))}
+            onPlus={() => setHomeScore(s => s + 1)}
+          />
+          <Text style={styles.vs}>VS</Text>
+          <ScoreBlock
+            name={config.opponentName.split(' ').slice(-1)[0].toUpperCase()}
+            score={oppScore}
+            onMinus={() => setOppScore(s => Math.max(0, s - 1))}
+            onPlus={() => setOppScore(s => s + 1)}
+            right
+          />
+        </View>
       </View>
 
       {/* Controls */}
       <View style={styles.controls}>
-        <TouchableOpacity style={styles.pauseBtn} onPress={handlePause}>
-          <Text style={styles.pauseBtnText}>{paused ? '▶ RESUME' : '⏸ PAUSE'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.ctrlBtn, !canNextPeriod && styles.ctrlBtnDisabled]}
-          onPress={handleNextPeriod}
-          disabled={!canNextPeriod}
-        >
-          <Text style={[styles.ctrlBtnText, !canNextPeriod && { color: Colors.muted }]}>
-            {nextLabel}
-          </Text>
-        </TouchableOpacity>
-        {showOTButton && (
-          <TouchableOpacity style={styles.otBtn} onPress={handleAddOT}>
-            <Text style={styles.otBtnText}>+ OT</Text>
+        <View style={styles.controlsInner}>
+          <TouchableOpacity style={styles.pauseBtn} onPress={handlePause}>
+            <Text style={styles.pauseBtnText}>{paused ? '▶ RESUME' : '⏸ PAUSE'}</Text>
           </TouchableOpacity>
-        )}
-        <TouchableOpacity style={styles.endBtn} onPress={handleEndGame}>
-          <Text style={styles.endBtnText}>END GAME</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.ctrlBtn, !canNextPeriod && styles.ctrlBtnDisabled]}
+            onPress={handleNextPeriod}
+            disabled={!canNextPeriod}
+          >
+            <Text style={[styles.ctrlBtnText, !canNextPeriod && { color: Colors.muted }]}>
+              {nextLabel}
+            </Text>
+          </TouchableOpacity>
+          {showOTButton && (
+            <TouchableOpacity style={styles.otBtn} onPress={handleAddOT}>
+              <Text style={styles.otBtnText}>+ OT</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.endBtn} onPress={handleEndGame}>
+            <Text style={styles.endBtnText}>END GAME</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Instruction */}
@@ -656,14 +662,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
     backgroundImage: 'radial-gradient(rgba(37,99,235,0.13) 1.5px, transparent 1.5px)' as any,
     backgroundSize: '22px 22px' as any,
+    overflow: 'hidden',
   },
 
   // Period bar
   periodBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12,
-    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
     backgroundColor: Colors.card,
     boxShadow: '0 2px 8px rgba(0,30,100,0.08)' as any,
+  },
+  periodBarInner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12,
+    paddingVertical: 12,
+    maxWidth: 800, alignSelf: 'center', width: '100%',
+    paddingHorizontal: Spacing.lg,
   },
   periodChip: {
     paddingHorizontal: 18, paddingVertical: 6,
@@ -687,10 +699,13 @@ const styles = StyleSheet.create({
 
   // Scoreboard
   scoreboard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
     backgroundColor: Colors.card,
+  },
+  scoreboardInner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
+    maxWidth: 800, alignSelf: 'center', width: '100%',
   },
   scoreBlock:      { alignItems: 'center', flex: 1 },
   scoreBlockRight: {},
@@ -711,10 +726,13 @@ const styles = StyleSheet.create({
 
   // Controls
   controls: {
-    flexDirection: 'row', gap: 8,
-    paddingHorizontal: Spacing.lg, paddingVertical: 8,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
     backgroundColor: Colors.card,
+  },
+  controlsInner: {
+    flexDirection: 'row', gap: 8,
+    paddingHorizontal: Spacing.lg, paddingVertical: 8,
+    maxWidth: 800, alignSelf: 'center', width: '100%',
   },
   ctrlBtn:         { flex: 1, paddingVertical: 9, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border2, alignItems: 'center' },
   ctrlBtnDisabled: { opacity: 0.35 },

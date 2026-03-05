@@ -11,7 +11,8 @@ import { DEMO_ORG } from '../lib/demoData';
 import { useCoach, CoachProvider } from '../context/CoachContext';
 import { useAuth } from '../context/AuthContext';
 import UpdateBanner from '../components/UpdateBanner';
-import LandingScreen       from '../screens/LandingScreen';
+import LandingScreen          from '../screens/LandingScreen';
+import PublicHypeCardScreen   from '../screens/PublicHypeCardScreen';
 import DemoOverviewScreen  from '../screens/DemoOverviewScreen';
 import DemoTeamsScreen     from '../screens/DemoTeamsScreen';
 import DemoScheduleScreen  from '../screens/DemoScheduleScreen';
@@ -123,6 +124,7 @@ function DashboardTabStack() {
       <DashStack.Screen name="StatTrackerLive"     component={withFilter(StatTrackerLiveScreen)}    options={{ animation: 'slide_from_right'  }} />
       <DashStack.Screen name="StatTrackerSummary"  component={withFilter(StatTrackerSummaryScreen)} options={{ animation: 'slide_from_right'  }} />
       <DashStack.Screen name="Highlights"          component={HighlightsScreen}                     options={{ animation: 'slide_from_bottom' }} />
+      <DashStack.Screen name="GameDayLive"         component={GameDayLiveScreen}                    options={{ animation: 'slide_from_bottom' }} />
     </DashStack.Navigator>
   );
 }
@@ -355,6 +357,16 @@ function AuthGate() {
   const { user, role, loading } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
+
+  // Public HYPE card route — bypasses auth entirely
+  if (Platform.OS === 'web') {
+    const match = typeof window !== 'undefined'
+      ? window.location.pathname.match(/^\/card\/([^/]+)\/([^/]+)/)
+      : null;
+    if (match) {
+      return <PublicHypeCardScreen teamCode={match[1]} athleteId={match[2]} />;
+    }
+  }
 
   if (loading) {
     return (

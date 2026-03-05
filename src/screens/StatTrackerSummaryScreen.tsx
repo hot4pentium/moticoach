@@ -157,14 +157,14 @@ export default function StatTrackerSummaryScreen() {
           style={styles.saveBtn}
           onPress={() => {
             recordGame(config.sport);
-            navigation.navigate('Tabs');
+            navigation.popToTop();
           }}
         >
           <Text style={styles.saveBtnText}>SAVE &amp; EXIT</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.exitBtn}
-          onPress={() => navigation.navigate('Tabs')}
+          onPress={() => navigation.popToTop()}
         >
           <Text style={styles.exitBtnText}>EXIT WITHOUT SAVING</Text>
         </TouchableOpacity>
@@ -181,7 +181,7 @@ function SectionLabel({ label }: { label: string }) {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  container: { flex: 1, backgroundColor: Colors.bg, overflow: 'hidden' },
 
   header: {
     flexDirection: 'row',

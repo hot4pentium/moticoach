@@ -58,7 +58,7 @@ Auth gate drives all routing — no manual navigation calls for auth transitions
 
 `AuthScreen` has an optional `onBack?: () => void` prop, but it is **not passed** from the auth gate — the back button is not shown.
 
-**CoachTabs** modal stack screens: Roster, StatTrackerSetup, StatTrackerLive, StatTrackerSummary, Playmaker, PrepBook, PlayEditor, DMList, DMConversation, NewDM.
+**CoachTabs** modal stack screens: Roster, StatTrackerSetup, StatTrackerLive, StatTrackerSummary, Playmaker, PrepBook, PlayEditor, DMList, DMConversation, NewDM, GameDayLive, Highlights.
 
 **SupporterStack** screens: SupporterTabs (Home + Chat), DMList, DMConversation, NewDM, AthleteProfile, plus all staff coaching screens (Roster, Playmaker, PrepBook, PlayEditor, StatTrackerSetup/Live/Summary, Highlights). Staff screens are reachable by navigation but only surfaced in the tools grid when `role === 'staff'`.
 
@@ -73,7 +73,7 @@ Four roles: `coach` | `staff` | `supporter` | `athlete`
 - **Coach** — claims an admin-provisioned team via teamCode. Full access: stat tracker, roster management, Playmaker, PrepBook, team settings (name/avatar/badge).
 - **Staff** — promoted from supporter by coach (from roster card). Routes to `SupporterStack` (not CoachTabs). Gets STAFF DASHBOARD in `SupporterHomeScreen` with full coaching tools (Playmaker, Roster edit, Stat Tracker, Prep Book). **Cannot**: manage team settings, transfer coach ownership, or delete the team.
 - **Supporter** (parent) — joins via team code. Gets SUPPORTER DASHBOARD: schedule, roster (view), playbook (view), badges, inline chat.
-- **Athlete** — joins via team code. Gets `AthleteNavigator` (tab-free). Full profile page with inline team chat (send to whole team), schedule, stats, badges.
+- **Athlete** — joins via team code. Gets `AthleteNavigator` (tab-free). Full profile page with inline team chat (send to whole team), schedule, stats, badges. **Note:** Athlete is not currently selectable on the sign-up screen (`RoleSelectScreen`) — only Coach and Supporter are offered. Existing athlete accounts still work; navigation routes `role === 'athlete'` → `AthleteNavigator`.
 - Independent athlete tracking by supporter = paid feature (`isPaid` gate)
 - Role stored in Firestore `users/{uid}.role` — AuthContext reads this on login
 
@@ -222,14 +222,15 @@ The hub lives in Firestore under `teams/{teamCode}` and is **live the moment adm
 3. BadgeShelf
 4. Next Event card → EventPreviewSheet (coach/staff see EDIT EVENT button → edit `bringsDrinks`/`bringsSnacks` inline)
 5. Schedule (week row → SEE FULL CALENDAR navigates to CalendarScreen)
-6. Tools grid ("COACH TOOLS"): Playmaker, Roster, Stat Tracker, Prep Book, Highlights
+6. Tools grid ("COACH TOOLS"): Playmaker, Roster, Stat Tracker, Prep Book, Highlights, Game Day
+   - **Prep Book** tap → `PrepBookPickerSheet` (event picker modal) — choose upcoming game/practice event or fallback GAME PREP / PRACTICE PLAN buttons. Navigates to PrepBook with `{ eventType, eventTitle }` params.
 
 **Supporter/Staff (`SupporterHomeScreen`)** — accessed via `SupporterStack`:
 1. Header — LeagueMatrix logo + `⏻` sign-out
 2. Hero (`Gradients.hero`): role tag = `STAFF DASHBOARD` / `SUPPORTER DASHBOARD` / `ATHLETE DASHBOARD`; avatar tap → ProfileSheet (for supporter/staff) or navigate AthleteProfile (athlete)
 3. BadgeShelf
 4. Next Event card → EventSheet (shows `bringsDrinks`/`bringsSnacks` read-only if set)
-5. **Game Day Live card** — amber-accented placeholder card ("COMING SOON"), sits between next event and schedule
+5. **Game Day Live card** — tappable → `GameDayLiveScreen`. Pregame confirm → active (LIVE TAP + shoutout grid) → paused/ended. Also accessible from coach dashboard tools grid.
 6. Schedule (expandable 4 weeks, DayCard tappable → EventSheet)
 7. Tools grid:
    - **Staff** ("STAFF TOOLS"): Playmaker, Roster (edit), Stat Tracker, Prep Book, Highlights
@@ -290,6 +291,7 @@ Exports: `StatTrackerConfig`, `PeriodType`, `SPORT_STATS`, `BASEBALL_BATTING_STA
 **StatTrackerSummaryScreen:**
 - Receives `{ config, homeScore, oppScore, teamStats, playerStats, isOT }` via route params
 - SAVE & EXIT calls `recordGame(sport)` from CoachContext (triggers badge checks)
+- Both footer buttons use `navigation.popToTop()` — `navigate('Tabs')` does not work in CoachTabs context
 
 ## Onboarding System
 - `src/hooks/useOnboarding.ts` — `useOnboarding(key, totalSteps)` hook
@@ -398,10 +400,13 @@ All accept `navigate?: (s: AdminSection, param?: string) => void`:
 - **`DemoTeamsScreen`** — 4-level: Sports → Leagues → Teams → **Team Hub**. `localTeams`/`localLeagues` state persists adds within session. Add Team modal: name (required) + coach name (optional) → generates `code` via `generateTeamCode()`. Add Team success state shows generated code with Copy button. **Team Hub** (level 4): coach card, JOIN CODE card (code + Copy button), roster table, upcoming events, quick actions. Team cards in list show code as inline blue pill.
 - **`DemoScheduleScreen`** — sport filter pills + 3-col league grid; tap to expand event panel. Draft/publish flow. Custom 3-column time picker.
 - **`DemoCommsScreen`** — broadcast compose + DM conversation view
-- **`DemoCoachesScreen`** — 3 levels:
+- **`DemoCoachesScreen`** — 5 levels (`Level` type: `'directory' | 'profile' | 'coach-view' | 'playbook' | 'stat-demo' | 'live-taps'`):
   - **Directory**: sport filter pills → coaches grouped by league
   - **Profile**: breadcrumb, header card (sport/league/status badges), contact card, team assignment card (name, league, code badge), **"View as Admin"** full-width solid-primary button, action row (Message, Email Coach)
-  - **Coach-view**: dark dashboard simulation — admin banner ("← Back to Admin" + "Admin Preview" badge), dark bg, greeting + team name (cyan Orbitron) + code chip, Next Event card, Quick Actions 2×2 grid, Roster preview, Schedule. Uses `cv` StyleSheet (module-level, dark `Colors.*` tokens). Back button calls `setLevel('profile')`.
+  - **Coach-view**: dark dashboard simulation — admin banner ("← Back to Admin" + "Admin Preview" badge), dark bg, greeting + team name (cyan Orbitron) + code chip, Next Event card, Quick Actions **5-card grid** (Stat Tracker→`stat-demo`, Roster, Playbook→`playbook`, Team Chat, Game Day→`live-taps`), Roster preview, Schedule. Tappable cards have cyan border; static cards have dim color. Uses `cv` StyleSheet.
+  - **playbook** (`setLevel('playbook')` from Quick Actions): 6 demo plays, filter tabs (ALL/OFFENSE/DEFENSE/SET-PIECE), 2-col play grid with field thumbnails
+  - **stat-demo** (`setLevel('stat-demo')`): live score bar + 6 stat tiles + tappable player rows with ✓ RECORDED flash
+  - **live-taps** (`setLevel('live-taps')`): animated LIVE TAP button + 9-player shoutout grid (uses `DEMO_ROSTER_PREVIEW[selectedCoach.teamId]` or `DEMO_SHOUTOUT_PLAYERS` fallback)
   - `initialCoachId?: string` prop for deep-link from other sections
 
 ## Firebase Hosting

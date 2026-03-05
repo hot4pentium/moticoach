@@ -57,7 +57,7 @@ export default function AchievementsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  container: { flex: 1, backgroundColor: Colors.bg, overflow: 'hidden' },
   scroll:    { paddingBottom: 32 },
 
   header: {

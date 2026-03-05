@@ -201,7 +201,7 @@ function MessageBubble({ item, myUid }: { item: Message; myUid: string }) {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  container: { flex: 1, backgroundColor: Colors.bg, overflow: 'hidden' },
 
   header: {
     flexDirection: 'row',

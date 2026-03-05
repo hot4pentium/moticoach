@@ -10,9 +10,11 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { httpsCallable } from 'firebase/functions';
 import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Colors, Fonts, Radius, Spacing } from '../theme';
@@ -157,9 +159,12 @@ const PRACTICE_STEPS = [
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function PrepBookScreen({ navigation, route }: any) {
-  const eventTitle  = route?.params?.eventTitle ?? 'Event';
-  const eventType   = route?.params?.eventType  ?? 'game';
+  const eventTitle   = route?.params?.eventTitle ?? 'Event';
+  const eventType    = route?.params?.eventType  ?? 'game';
+  const reviewMode   = route?.params?.mode === 'review';
+  const reviewEntry  = route?.params?.entry ?? null;
   const { coachSport, isPaid } = useCoach();
+  const { teamCode } = useAuth();
 
   const [upgradeVisible, setUpgradeVisible] = useState(!isPaid);
   const [currentStep, setCurrentStep] = useState(0);
@@ -200,19 +205,144 @@ export default function PrepBookScreen({ navigation, route }: any) {
                     : eventType === 'practice' ? Colors.green
                     :                            Colors.purple;
 
+  const [showComplete, setShowComplete] = useState(false);
+  const [savedEntry, setSavedEntry] = useState<any>(null);
+
   const goNext = () => {
     const isFinal = currentStep === STEPS.length - 1;
-    setCompletedSteps(prev => {
-      const next = [...new Set([...prev, currentStep])];
-      return next;
-    });
-    if (!isFinal) setCurrentStep(s => s + 1);
-    else navigation?.goBack();
+    const nextCompleted = [...new Set([...completedSteps, currentStep])];
+    setCompletedSteps(nextCompleted);
+    if (!isFinal) {
+      setCurrentStep(s => s + 1);
+    } else {
+      const snapshot: Record<string, any> = {
+        eventTitle, eventType,
+        completedAt: Date.now(),
+        completedSteps: nextCompleted,
+        roster: roster.map(p => ({ id: p.id, name: p.name, jersey: p.jersey, position: p.position, status: p.status })),
+      };
+      if (!isPractice) {
+        snapshot.lineupRoles = lineupRoles;
+        snapshot.captainId = captainId;
+        snapshot.scoutItems = scoutItems;
+        snapshot.scoutNotes = scoutNotes;
+        snapshot.gameFocusItems = gameFocusItems;
+        snapshot.gameNotes = gameNotes;
+      } else {
+        snapshot.drills = drills;
+        snapshot.trainingFocus = trainingFocus;
+        snapshot.focusNotes = focusNotes;
+        snapshot.equipment = equipment;
+      }
+      if (teamCode) {
+        addDoc(collection(db, 'teams', teamCode, 'prepBookEntries'), {
+          ...snapshot,
+          completedAt: serverTimestamp(),
+        }).catch(() => {});
+      }
+      setSavedEntry(snapshot);
+      setShowComplete(true);
+    }
   };
 
   const goBack = () => {
     if (currentStep > 0) setCurrentStep(s => s - 1);
     else navigation?.goBack();
+  };
+
+  const printPrepBook = () => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const starters  = roster.filter(p => lineupRoles[p.id] === 'start');
+    const subs      = roster.filter(p => lineupRoles[p.id] === 'sub');
+    const captain   = roster.find(p => p.id === captainId);
+    const absent    = roster.filter(p => p.status === 'absent');
+    const injured   = roster.filter(p => p.status === 'injured');
+    const attended  = roster.filter(p => p.status === 'present').length;
+    const totalDrillMin = drills.reduce((s, d) => s + d.duration, 0);
+
+    const gameHTML = `
+      <h2>LINEUP</h2>
+      <div class="row">
+        <div class="col">
+          <div class="col-label">STARTERS</div>
+          ${starters.map(p => `<div class="player"><span class="jersey">#${p.jersey}</span><span class="name">${p.name}${captain?.id === p.id ? ' <span class="cap">C</span>' : ''}</span><span class="pos">${p.position}</span></div>`).join('')}
+        </div>
+        <div class="col">
+          <div class="col-label">SUBS</div>
+          ${subs.map(p => `<div class="player"><span class="jersey">#${p.jersey}</span><span class="name">${p.name}</span><span class="pos">${p.position}</span></div>`).join('')}
+        </div>
+      </div>
+      ${(absent.length + injured.length) > 0 ? `<div class="absent">OUT: ${[...absent.map(p => p.name), ...injured.map(p => `${p.name} (inj.)`)].join(', ')}</div>` : ''}
+      <h2>GAME FOCUS</h2>
+      ${gameFocusItems.map(item => `<div class="focus-item"><span>▸</span><div><div>${item.title}</div>${item.note ? `<div class="note">${item.note}</div>` : ''}</div></div>`).join('')}
+      ${gameNotes ? `<div class="notes-box">${gameNotes.replace(/\n/g, '<br>')}</div>` : ''}
+      <h2>SCOUT NOTES</h2>
+      ${scoutItems.filter(s => s.checked || s.note).map(item => `<div class="focus-item"><span>${item.checked ? '✓' : '○'}</span><div><div>${item.title}</div>${item.note ? `<div class="note">${item.note}</div>` : ''}</div></div>`).join('')}
+      ${scoutNotes ? `<div class="notes-box">${scoutNotes.replace(/\n/g, '<br>')}</div>` : ''}
+    `;
+
+    const practiceHTML = `
+      <h2>ROSTER (${attended} PRESENT)</h2>
+      <div class="equipment-grid">
+        ${roster.filter(p => p.status === 'present').map(p => `<div class="player" style="width:48%;"><span class="jersey">#${p.jersey}</span><span class="name">${p.name}</span><span class="pos">${p.position}</span></div>`).join('')}
+      </div>
+      ${(absent.length + injured.length) > 0 ? `<div class="absent">OUT: ${[...absent.map(p => p.name), ...injured.map(p => `${p.name} (inj.)`)].join(', ')}</div>` : ''}
+      <h2>DRILL PLAN${drills.length > 0 ? ` (${totalDrillMin} MIN TOTAL)` : ''}</h2>
+      ${drills.length > 0
+        ? drills.map((d, i) => `<div class="drill-block"><div class="drill-title">${i + 1}. ${d.name}</div><div class="drill-meta">${d.duration} min${d.notes ? ` · ${d.notes}` : ''}</div></div>`).join('')
+        : '<div class="muted">No drills added</div>'}
+      <h2>TRAINING FOCUS</h2>
+      ${trainingFocus.map(item => `<div class="focus-item"><span>▸</span><div><div>${item.text}</div>${item.detail ? `<div class="note">${item.detail}</div>` : ''}</div></div>`).join('')}
+      ${focusNotes ? `<div class="notes-box">${focusNotes.replace(/\n/g, '<br>')}</div>` : ''}
+      <h2>EQUIPMENT</h2>
+      <div class="equipment-grid">
+        ${equipment.map(item => `<div class="equipment-item"><span class="check">${item.checked ? '✓' : ''}</span><span>${item.label}</span></div>`).join('')}
+      </div>
+    `;
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<title>${isPractice ? 'Practice Plan' : 'Game Prep'} — ${eventTitle}</title>
+<style>
+  body{font-family:Arial,sans-serif;color:#111;background:#fff;max-width:780px;margin:0 auto;padding:20px 24px;font-size:13px;}
+  h1{font-size:20px;margin-bottom:2px;}
+  .subtitle{color:#666;font-size:12px;margin-bottom:4px;}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#555;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:20px;margin-bottom:8px;}
+  .row{display:flex;gap:32px;}
+  .col{flex:1;}
+  .col-label{font-weight:bold;font-size:11px;color:#555;margin-bottom:6px;}
+  .player{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f0f0f0;}
+  .jersey{font-weight:bold;width:28px;text-align:right;color:#333;}
+  .name{flex:1;}
+  .pos{color:#888;font-size:11px;}
+  .cap{background:#f59e0b;color:#000;font-size:9px;font-weight:bold;padding:1px 5px;border-radius:3px;}
+  .focus-item{padding:4px 0;display:flex;gap:8px;}
+  .note{color:#666;font-size:11px;margin-top:1px;}
+  .drill-block{border:1px solid #ddd;border-radius:5px;padding:8px 10px;margin-bottom:6px;}
+  .drill-title{font-weight:bold;}
+  .drill-meta{color:#666;font-size:11px;margin-top:2px;}
+  .equipment-grid{display:flex;flex-wrap:wrap;}
+  .equipment-item{display:flex;align-items:center;gap:8px;width:48%;padding:3px 0;}
+  .check{width:15px;height:15px;border:1.5px solid #999;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;}
+  .absent{color:#dc2626;font-size:11px;margin-top:8px;}
+  .notes-box{background:#f9f9f9;border:1px solid #e5e7eb;border-radius:5px;padding:8px 10px;margin-top:6px;min-height:36px;line-height:1.5;}
+  .muted{color:#999;}
+  .footer{margin-top:32px;padding-top:10px;border-top:1px solid #ddd;color:#aaa;font-size:10px;text-align:center;}
+  @media print{body{padding:10px 16px;}}
+</style></head><body>
+<h1>${isPractice ? 'PRACTICE PLAN' : 'GAME PREP'}</h1>
+<div class="subtitle">${eventTitle} · ${attended} PLAYERS READY</div>
+${isPractice ? practiceHTML : gameHTML}
+<div class="footer">LeagueMatrix · ${new Date().toLocaleDateString()}</div>
+</body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
   };
 
   const toggleAbsent = (id: string) => {
@@ -225,6 +355,10 @@ export default function PrepBookScreen({ navigation, route }: any) {
   const absentCount    = roster.filter(p => p.status === 'absent').length;
   const injuredCount   = roster.filter(p => p.status === 'injured').length;
   const availableCount = roster.filter(p => p.status === 'present').length;
+
+  if (reviewMode && reviewEntry) {
+    return <PrepBookReview navigation={navigation} entry={reviewEntry} />;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -371,6 +505,7 @@ export default function PrepBookScreen({ navigation, route }: any) {
             totalSteps={STEPS.length}
             accentColor={accentColor}
             steps={STEPS}
+            onPrint={Platform.OS === 'web' ? printPrepBook : undefined}
           />
         )}
 
@@ -410,6 +545,7 @@ export default function PrepBookScreen({ navigation, route }: any) {
             totalSteps={STEPS.length}
             accentColor={accentColor}
             steps={STEPS}
+            onPrint={Platform.OS === 'web' ? printPrepBook : undefined}
           />
         )}
 
@@ -432,6 +568,50 @@ export default function PrepBookScreen({ navigation, route }: any) {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Completion Modal */}
+      <Modal visible={showComplete} transparent animationType="fade" statusBarTranslucent>
+        <View style={styles.completeOverlay}>
+          <View style={styles.completeCard}>
+            <View style={[styles.completeIconWrap, { backgroundColor: `${accentColor}18`, borderColor: `${accentColor}44` }]}>
+              <Text style={styles.completeEmoji}>✅</Text>
+            </View>
+            <Text style={[styles.completeTitle, { color: accentColor }]}>PREP LOCKED IN</Text>
+            <Text style={styles.completeMsg}>
+              Your {isPractice ? 'practice plan' : 'game prep'} for{'\n'}
+              <Text style={{ color: Colors.text }}>{eventTitle}</Text>
+              {'\n'}has been saved.
+            </Text>
+            <View style={styles.completeHint}>
+              <Ionicons name="information-circle-outline" size={16} color={Colors.cyan} />
+              <Text style={styles.completeHintTxt}>
+                You can review this prep book anytime from the Prep Book section on your dashboard.
+              </Text>
+            </View>
+            {savedEntry && (
+              <TouchableOpacity
+                style={[styles.completeReviewBtn, { borderColor: accentColor }]}
+                onPress={() => {
+                  setShowComplete(false);
+                  navigation?.replace('PrepBook', { mode: 'review', entry: savedEntry });
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="eye-outline" size={16} color={accentColor} />
+                <Text style={[styles.completeReviewBtnTxt, { color: accentColor }]}>VIEW SAVED PREP</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.completeGotItBtn, { backgroundColor: accentColor }]}
+              onPress={() => { setShowComplete(false); navigation?.goBack(); }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.completeGotItTxt}>GOT IT</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -1088,13 +1268,14 @@ function StepStub({ step, color }: { step: typeof GAME_STEPS[0]; color: string }
 // ─── Step 6: Final Check ─────────────────────────────────────────────────────
 
 function FinalStep({
-  roster, completedSteps, totalSteps, accentColor, steps,
+  roster, completedSteps, totalSteps, accentColor, steps, onPrint,
 }: {
   roster: Player[];
   completedSteps: number[];
   totalSteps: number;
   accentColor: string;
   steps: typeof GAME_STEPS;
+  onPrint?: () => void;
 }) {
   const available = roster.filter(p => p.status === 'present').length;
   const pct = Math.round((completedSteps.length / totalSteps) * 100);
@@ -1119,9 +1300,396 @@ function FinalStep({
       <View style={styles.readyBanner}>
         <Text style={[styles.readyText, { color: accentColor }]}>{available} PLAYERS READY · TAP CONFIRM</Text>
       </View>
+      {onPrint && (
+        <TouchableOpacity style={styles.printBtn} onPress={onPrint}>
+          <Text style={styles.printBtnText}>🖨 PRINT SIDELINE SHEET</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
+
+// ─── Prep Book Review (read-only) ─────────────────────────────────────────────
+
+function PrepBookReview({ navigation, entry }: { navigation: any; entry: any }) {
+  const isPractice  = entry.eventType === 'practice';
+  const accentColor = entry.eventType === 'game' ? Colors.amber
+                    : entry.eventType === 'practice' ? Colors.green
+                    : Colors.purple;
+  const completedDate = entry.completedAt
+    ? new Date(entry.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '';
+  const pct = entry.completedSteps && entry.completedSteps.length
+    ? Math.round((entry.completedSteps.length / (isPractice ? PRACTICE_STEPS.length : GAME_STEPS.length)) * 100)
+    : 0;
+
+  const present  = (entry.roster ?? []).filter((p: any) => p.status === 'present');
+  const absent   = (entry.roster ?? []).filter((p: any) => p.status === 'absent');
+  const injured  = (entry.roster ?? []).filter((p: any) => p.status === 'injured');
+  const starters = present.filter((p: any) => entry.lineupRoles?.[p.id] === 'start');
+  const subs     = present.filter((p: any) => entry.lineupRoles?.[p.id] === 'sub');
+  const captain  = present.find((p: any) => p.id === entry.captainId);
+
+  const printEntry = () => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const totalDrillMin = (entry.drills ?? []).reduce((s: number, d: any) => s + (d.duration ?? 0), 0);
+
+    const gameHTML = `
+      <h2>LINEUP</h2>
+      <div class="row">
+        <div class="col">
+          <div class="col-label">STARTERS</div>
+          ${starters.map((p: any) => `<div class="player"><span class="jersey">#${p.jersey}</span><span class="name">${p.name}${captain?.id === p.id ? ' <span class="cap">C</span>' : ''}</span><span class="pos">${p.position}</span></div>`).join('')}
+        </div>
+        <div class="col">
+          <div class="col-label">SUBS</div>
+          ${subs.map((p: any) => `<div class="player"><span class="jersey">#${p.jersey}</span><span class="name">${p.name}</span><span class="pos">${p.position}</span></div>`).join('')}
+        </div>
+      </div>
+      ${(absent.length + injured.length) > 0 ? `<div class="absent">OUT: ${[...absent.map((p: any) => p.name), ...injured.map((p: any) => `${p.name} (inj.)`)].join(', ')}</div>` : ''}
+      <h2>GAME FOCUS</h2>
+      ${(entry.gameFocusItems ?? []).map((item: any) => `<div class="focus-item"><span>▸</span><div><div>${item.title}</div>${item.note ? `<div class="note">${item.note}</div>` : ''}</div></div>`).join('')}
+      ${entry.gameNotes ? `<div class="notes-box">${entry.gameNotes.replace(/\n/g, '<br>')}</div>` : ''}
+      <h2>SCOUT NOTES</h2>
+      ${(entry.scoutItems ?? []).filter((s: any) => s.checked || s.note).map((item: any) => `<div class="focus-item"><span>${item.checked ? '✓' : '○'}</span><div><div>${item.title}</div>${item.note ? `<div class="note">${item.note}</div>` : ''}</div></div>`).join('')}
+      ${entry.scoutNotes ? `<div class="notes-box">${entry.scoutNotes.replace(/\n/g, '<br>')}</div>` : ''}
+    `;
+
+    const practiceHTML = `
+      <h2>ROSTER (${present.length} PRESENT)</h2>
+      <div class="equipment-grid">
+        ${present.map((p: any) => `<div class="player" style="width:48%;"><span class="jersey">#${p.jersey}</span><span class="name">${p.name}</span><span class="pos">${p.position}</span></div>`).join('')}
+      </div>
+      ${(absent.length + injured.length) > 0 ? `<div class="absent">OUT: ${[...absent.map((p: any) => p.name), ...injured.map((p: any) => `${p.name} (inj.)`)].join(', ')}</div>` : ''}
+      <h2>DRILL PLAN${totalDrillMin > 0 ? ` (${totalDrillMin} MIN TOTAL)` : ''}</h2>
+      ${(entry.drills ?? []).length > 0
+        ? (entry.drills as any[]).map((d: any, i: number) => `<div class="drill-block"><div class="drill-title">${i + 1}. ${d.name}</div><div class="drill-meta">${d.duration} min${d.notes ? ` · ${d.notes}` : ''}</div></div>`).join('')
+        : '<div class="muted">No drills added</div>'}
+      <h2>TRAINING FOCUS</h2>
+      ${(entry.trainingFocus ?? []).map((item: any) => `<div class="focus-item"><span>▸</span><div><div>${item.text}</div>${item.detail ? `<div class="note">${item.detail}</div>` : ''}</div></div>`).join('')}
+      ${entry.focusNotes ? `<div class="notes-box">${entry.focusNotes.replace(/\n/g, '<br>')}</div>` : ''}
+      <h2>EQUIPMENT</h2>
+      <div class="equipment-grid">
+        ${(entry.equipment ?? []).map((item: any) => `<div class="equipment-item"><span class="check">${item.checked ? '✓' : ''}</span><span>${item.label}</span></div>`).join('')}
+      </div>
+    `;
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<title>${isPractice ? 'Practice Plan' : 'Game Prep'} — ${entry.eventTitle}</title>
+<style>
+  body{font-family:Arial,sans-serif;color:#111;background:#fff;max-width:780px;margin:0 auto;padding:20px 24px;font-size:13px;}
+  h1{font-size:20px;margin-bottom:2px;}
+  .subtitle{color:#666;font-size:12px;margin-bottom:4px;}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#555;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:20px;margin-bottom:8px;}
+  .row{display:flex;gap:32px;}
+  .col{flex:1;}
+  .col-label{font-weight:bold;font-size:11px;color:#555;margin-bottom:6px;}
+  .player{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f0f0f0;}
+  .jersey{font-weight:bold;width:28px;text-align:right;color:#333;}
+  .name{flex:1;}
+  .pos{color:#888;font-size:11px;}
+  .cap{background:#f59e0b;color:#000;font-size:9px;font-weight:bold;padding:1px 5px;border-radius:3px;}
+  .focus-item{padding:4px 0;display:flex;gap:8px;}
+  .note{color:#666;font-size:11px;margin-top:1px;}
+  .drill-block{border:1px solid #ddd;border-radius:5px;padding:8px 10px;margin-bottom:6px;}
+  .drill-title{font-weight:bold;}
+  .drill-meta{color:#666;font-size:11px;margin-top:2px;}
+  .equipment-grid{display:flex;flex-wrap:wrap;}
+  .equipment-item{display:flex;align-items:center;gap:8px;width:48%;padding:3px 0;}
+  .check{width:15px;height:15px;border:1.5px solid #999;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;}
+  .absent{color:#dc2626;font-size:11px;margin-top:8px;}
+  .notes-box{background:#f9f9f9;border:1px solid #e5e7eb;border-radius:5px;padding:8px 10px;margin-top:6px;min-height:36px;line-height:1.5;}
+  .muted{color:#999;}
+  .footer{margin-top:32px;padding-top:10px;border-top:1px solid #ddd;color:#aaa;font-size:10px;text-align:center;}
+  @media print{body{padding:10px 16px;}}
+</style></head><body>
+<h1>${isPractice ? 'PRACTICE PLAN' : 'GAME PREP'}</h1>
+<div class="subtitle">${entry.eventTitle} · ${completedDate} · ${present.length} PLAYERS READY</div>
+${isPractice ? practiceHTML : gameHTML}
+<div class="footer">LeagueMatrix · Printed ${new Date().toLocaleDateString()}</div>
+</body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
+
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack()}>
+          <Text style={styles.backText}>← BACK</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>PREP REVIEW</Text>
+        {Platform.OS === 'web' ? (
+          <TouchableOpacity onPress={printEntry} style={rvStyles.printBtn}>
+            <Ionicons name="print-outline" size={16} color={accentColor} />
+            <Text style={[rvStyles.printBtnTxt, { color: accentColor }]}>PRINT</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 60 }} />
+        )}
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 48 }}>
+        <View style={{ maxWidth: 800, alignSelf: 'center', width: '100%' }}>
+
+          {/* Hero */}
+          <View style={[rvStyles.hero, { borderColor: accentColor }]}>
+            <View style={[rvStyles.typeBadge, { backgroundColor: `${accentColor}22` }]}>
+              <Text style={[rvStyles.typeTxt, { color: accentColor }]}>{entry.eventType?.toUpperCase()}</Text>
+            </View>
+            <Text style={rvStyles.eventTitle}>{entry.eventTitle}</Text>
+            {completedDate ? <Text style={rvStyles.dateTxt}>{completedDate}</Text> : null}
+            <View style={rvStyles.pctRow}>
+              <View style={rvStyles.pctBarBg}>
+                <View style={[rvStyles.pctBarFill, { width: `${pct}%` as any, backgroundColor: accentColor }]} />
+              </View>
+              <Text style={[rvStyles.pctTxt, { color: accentColor }]}>{pct}% COMPLETE</Text>
+            </View>
+          </View>
+
+          {/* Attendance */}
+          <Text style={rvStyles.sectionLabel}>ATTENDANCE</Text>
+          <View style={rvStyles.card}>
+            {/* Summary row */}
+            <View style={rvStyles.attendSummary}>
+              <View style={rvStyles.attendPill}>
+                <Text style={[rvStyles.attendPillNum, { color: Colors.green }]}>{present.length}</Text>
+                <Text style={rvStyles.attendPillLbl}>PRESENT</Text>
+              </View>
+              {absent.length > 0 && (
+                <View style={rvStyles.attendPill}>
+                  <Text style={[rvStyles.attendPillNum, { color: Colors.amber }]}>{absent.length}</Text>
+                  <Text style={rvStyles.attendPillLbl}>ABSENT</Text>
+                </View>
+              )}
+              {injured.length > 0 && (
+                <View style={rvStyles.attendPill}>
+                  <Text style={[rvStyles.attendPillNum, { color: Colors.red }]}>{injured.length}</Text>
+                  <Text style={rvStyles.attendPillLbl}>INJURED</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Present players grid */}
+            {present.length > 0 && (
+              <>
+                <View style={rvStyles.rosterDivider} />
+                <View style={rvStyles.rosterGrid}>
+                  {present.map((p: any) => (
+                    <View key={p.id} style={rvStyles.rosterCell}>
+                      <Text style={rvStyles.rosterJersey}>#{p.jersey}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={rvStyles.rosterName}>{p.name}</Text>
+                        <Text style={rvStyles.rosterPos}>{p.position}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {/* Absent / Injured */}
+            {(absent.length > 0 || injured.length > 0) && (
+              <>
+                <View style={rvStyles.rosterDivider} />
+                {absent.map((p: any) => (
+                  <View key={p.id} style={rvStyles.outRow}>
+                    <View style={[rvStyles.outBadge, { backgroundColor: `${Colors.amber}20`, borderColor: `${Colors.amber}44` }]}>
+                      <Text style={[rvStyles.outBadgeTxt, { color: Colors.amber }]}>ABSENT</Text>
+                    </View>
+                    <Text style={rvStyles.outName}>#{p.jersey}  {p.name}</Text>
+                  </View>
+                ))}
+                {injured.map((p: any) => (
+                  <View key={p.id} style={rvStyles.outRow}>
+                    <View style={[rvStyles.outBadge, { backgroundColor: `${Colors.red}20`, borderColor: `${Colors.red}44` }]}>
+                      <Text style={[rvStyles.outBadgeTxt, { color: Colors.red }]}>INJURED</Text>
+                    </View>
+                    <Text style={rvStyles.outName}>#{p.jersey}  {p.name}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+          </View>
+
+          {/* Game-specific sections */}
+          {!isPractice && starters.length > 0 && (
+            <>
+              <Text style={rvStyles.sectionLabel}>STARTING LINEUP</Text>
+              <View style={rvStyles.card}>
+                {starters.map((p: any) => (
+                  <View key={p.id} style={rvStyles.playerRow}>
+                    <Text style={rvStyles.jersey}>#{p.jersey}</Text>
+                    <Text style={rvStyles.playerName}>
+                      {p.name}{captain?.id === p.id ? '  C' : ''}
+                    </Text>
+                    <Text style={rvStyles.position}>{p.position}</Text>
+                  </View>
+                ))}
+                {subs.length > 0 && (
+                  <Text style={rvStyles.subsLine}>SUBS: {subs.map((p: any) => `#${p.jersey} ${p.name}`).join('  ·  ')}</Text>
+                )}
+              </View>
+            </>
+          )}
+
+          {!isPractice && (entry.gameFocusItems ?? []).length > 0 && (
+            <>
+              <Text style={rvStyles.sectionLabel}>GAME FOCUS</Text>
+              <View style={rvStyles.card}>
+                {(entry.gameFocusItems as any[]).map((item: any) => (
+                  <View key={item.id} style={rvStyles.focusRow}>
+                    <Text style={[rvStyles.focusBullet, { color: accentColor }]}>▸</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={rvStyles.focusTitle}>{item.title}</Text>
+                      {item.note ? <Text style={rvStyles.focusNote}>{item.note}</Text> : null}
+                    </View>
+                  </View>
+                ))}
+                {entry.gameNotes ? <Text style={rvStyles.notesBlock}>{entry.gameNotes}</Text> : null}
+              </View>
+            </>
+          )}
+
+          {!isPractice && (entry.scoutItems ?? []).some((s: any) => s.checked || s.note) && (
+            <>
+              <Text style={rvStyles.sectionLabel}>SCOUT NOTES</Text>
+              <View style={rvStyles.card}>
+                {(entry.scoutItems as any[]).filter((s: any) => s.checked || s.note).map((item: any) => (
+                  <View key={item.id} style={rvStyles.focusRow}>
+                    <Text style={[rvStyles.focusBullet, { color: item.checked ? Colors.green : Colors.muted }]}>
+                      {item.checked ? '✓' : '○'}
+                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={rvStyles.focusTitle}>{item.title}</Text>
+                      {item.note ? <Text style={rvStyles.focusNote}>{item.note}</Text> : null}
+                    </View>
+                  </View>
+                ))}
+                {entry.scoutNotes ? <Text style={rvStyles.notesBlock}>{entry.scoutNotes}</Text> : null}
+              </View>
+            </>
+          )}
+
+          {/* Practice-specific sections */}
+          {isPractice && (entry.drills ?? []).length > 0 && (
+            <>
+              <Text style={rvStyles.sectionLabel}>DRILL PLAN</Text>
+              <View style={rvStyles.card}>
+                {(entry.drills as any[]).map((d: any, i: number) => (
+                  <View key={d.id ?? i} style={[rvStyles.drillRow, i > 0 && { borderTopWidth: 1, borderTopColor: Colors.border }]}>
+                    <View style={[rvStyles.drillNum, { backgroundColor: `${accentColor}22` }]}>
+                      <Text style={[rvStyles.drillNumTxt, { color: accentColor }]}>{i + 1}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={rvStyles.drillName}>{d.name}</Text>
+                      <Text style={rvStyles.drillMeta}>{d.duration} min{d.notes ? `  ·  ${d.notes}` : ''}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {isPractice && (entry.trainingFocus ?? []).length > 0 && (
+            <>
+              <Text style={rvStyles.sectionLabel}>TRAINING FOCUS</Text>
+              <View style={rvStyles.card}>
+                {(entry.trainingFocus as any[]).map((item: any) => (
+                  <View key={item.id} style={rvStyles.focusRow}>
+                    <Text style={[rvStyles.focusBullet, { color: accentColor }]}>▸</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={rvStyles.focusTitle}>{item.text}</Text>
+                      {item.detail ? <Text style={rvStyles.focusNote}>{item.detail}</Text> : null}
+                    </View>
+                  </View>
+                ))}
+                {entry.focusNotes ? <Text style={rvStyles.notesBlock}>{entry.focusNotes}</Text> : null}
+              </View>
+            </>
+          )}
+
+          {isPractice && (entry.equipment ?? []).some((e: any) => e.checked) && (
+            <>
+              <Text style={rvStyles.sectionLabel}>EQUIPMENT PACKED</Text>
+              <View style={rvStyles.card}>
+                {(entry.equipment as any[]).filter((e: any) => e.checked).map((item: any) => (
+                  <View key={item.id} style={rvStyles.equipRow}>
+                    <Text style={[rvStyles.equipCheck, { color: Colors.green }]}>✓</Text>
+                    <Text style={rvStyles.equipLabel}>{item.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const rvStyles = StyleSheet.create({
+  hero:        { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, marginBottom: Spacing.lg, backgroundColor: Colors.card },
+  typeBadge:   { alignSelf: 'flex-start', paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: Radius.sm, marginBottom: Spacing.xs },
+  typeTxt:     { fontFamily: Fonts.monoBold, fontSize: 10, letterSpacing: 1 },
+  eventTitle:  { fontFamily: Fonts.monoBold, fontSize: 18, color: Colors.text, marginBottom: 2 },
+  dateTxt:     { fontFamily: Fonts.rajdhani, fontSize: 13, color: Colors.dim, marginBottom: Spacing.sm },
+  pctRow:      { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.xs },
+  pctBarBg:    { flex: 1, height: 4, backgroundColor: Colors.border, borderRadius: 2, overflow: 'hidden' },
+  pctBarFill:  { height: 4, borderRadius: 2 },
+  pctTxt:      { fontFamily: Fonts.monoBold, fontSize: 11, letterSpacing: 0.5 },
+  sectionLabel:{ fontFamily: Fonts.monoBold, fontSize: 11, color: Colors.dim, letterSpacing: 1, marginBottom: Spacing.xs, marginTop: Spacing.sm },
+  card:        { backgroundColor: Colors.card, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, marginBottom: Spacing.sm },
+  statLine:    { fontFamily: Fonts.rajdhani, fontSize: 15 },
+  statNum:     { fontFamily: Fonts.monoBold, fontSize: 20, color: Colors.text },
+  statSub:     { fontFamily: Fonts.mono, fontSize: 12, color: Colors.dim },
+  statAbsent:  { fontFamily: Fonts.mono, fontSize: 12, color: Colors.amber },
+  statInjured: { fontFamily: Fonts.mono, fontSize: 12, color: Colors.red },
+  playerRow:   { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 5 },
+  jersey:      { fontFamily: Fonts.monoBold, fontSize: 12, color: Colors.cyan, width: 32 },
+  playerName:  { flex: 1, fontFamily: Fonts.rajdhani, fontSize: 14, color: Colors.text },
+  position:    { fontFamily: Fonts.mono, fontSize: 11, color: Colors.dim },
+  subsLine:    { fontFamily: Fonts.mono, fontSize: 11, color: Colors.dim, marginTop: Spacing.xs, paddingTop: Spacing.xs, borderTopWidth: 1, borderTopColor: Colors.border },
+  focusRow:    { flexDirection: 'row', gap: Spacing.sm, paddingVertical: 5 },
+  focusBullet: { fontFamily: Fonts.mono, fontSize: 14, marginTop: 1 },
+  focusTitle:  { fontFamily: Fonts.rajdhani, fontSize: 14, color: Colors.text },
+  focusNote:   { fontFamily: Fonts.mono, fontSize: 11, color: Colors.dim, marginTop: 2 },
+  notesBlock:  { fontFamily: Fonts.rajdhani, fontSize: 13, color: Colors.dim, marginTop: Spacing.sm, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
+  drillRow:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm },
+  drillNum:    { width: 28, height: 28, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  drillNumTxt: { fontFamily: Fonts.monoBold, fontSize: 12 },
+  drillName:   { fontFamily: Fonts.rajdhani, fontSize: 14, color: Colors.text },
+  drillMeta:   { fontFamily: Fonts.mono, fontSize: 11, color: Colors.dim },
+  equipRow:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 4 },
+  equipCheck:  { fontFamily: Fonts.monoBold, fontSize: 13, width: 20 },
+  equipLabel:  { fontFamily: Fonts.rajdhani, fontSize: 14, color: Colors.text },
+  printBtn:      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.sm, paddingVertical: 4 },
+  printBtnTxt:   { fontFamily: Fonts.monoBold, fontSize: 11, letterSpacing: 0.5 },
+  attendSummary: { flexDirection: 'row', gap: Spacing.md, marginBottom: 2 },
+  attendPill:    { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  attendPillNum: { fontFamily: Fonts.monoBold, fontSize: 22 },
+  attendPillLbl: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.dim, letterSpacing: 0.5 },
+  rosterDivider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.sm },
+  rosterGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  rosterCell:    { flexDirection: 'row', alignItems: 'center', gap: 6, width: '48%', paddingVertical: 5, paddingHorizontal: 6, backgroundColor: Colors.bg, borderRadius: Radius.sm },
+  rosterJersey:  { fontFamily: Fonts.monoBold, fontSize: 11, color: Colors.cyan, width: 26, textAlign: 'right' },
+  rosterName:    { fontFamily: Fonts.rajdhaniBold, fontSize: 13, color: Colors.text },
+  rosterPos:     { fontFamily: Fonts.mono, fontSize: 10, color: Colors.muted },
+  outRow:        { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 5 },
+  outBadge:      { paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm, borderWidth: 1 },
+  outBadgeTxt:   { fontFamily: Fonts.monoBold, fontSize: 9, letterSpacing: 0.5 },
+  outName:       { fontFamily: Fonts.rajdhani, fontSize: 13, color: Colors.dim },
+});
 
 // ─── Practice Step: Drill Plan ───────────────────────────────────────────────
 
@@ -1903,6 +2471,13 @@ const styles = StyleSheet.create({
   },
   readyText: { fontFamily: Fonts.orbitron, fontSize: 11, letterSpacing: 1 },
 
+  printBtn: {
+    marginTop: 12, padding: 12, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border2,
+    alignItems: 'center',
+  },
+  printBtnText: { fontFamily: Fonts.mono, fontSize: 10, color: Colors.dim, letterSpacing: 1 },
+
   // ── Drill Plan ────────────────────────────────────────────────────────────
   drillHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12,
@@ -2032,4 +2607,18 @@ const styles = StyleSheet.create({
   stepCounterSub:  { fontFamily: Fonts.mono, fontSize: 8, color: Colors.muted, marginTop: 2 },
   nextBtn:         { paddingHorizontal: 20, paddingVertical: 13, borderRadius: Radius.md },
   nextBtnText:     { fontFamily: Fonts.orbitron, fontSize: 11, color: '#000', letterSpacing: 1 },
+
+  // Completion modal
+  completeOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
+  completeCard:        { width: '100%', maxWidth: 380, backgroundColor: Colors.card, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border, padding: Spacing.xl, alignItems: 'center', gap: Spacing.sm },
+  completeIconWrap:    { width: 72, height: 72, borderRadius: 36, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.xs },
+  completeEmoji:       { fontSize: 36 },
+  completeTitle:       { fontFamily: Fonts.orbitron, fontSize: 16, letterSpacing: 1, textAlign: 'center' },
+  completeMsg:         { fontFamily: Fonts.rajdhani, fontSize: 15, color: Colors.dim, textAlign: 'center', lineHeight: 22 },
+  completeHint:        { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.xs, backgroundColor: `${Colors.cyan}12`, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: `${Colors.cyan}25`, width: '100%' },
+  completeHintTxt:     { flex: 1, fontFamily: Fonts.rajdhani, fontSize: 13, color: Colors.dim, lineHeight: 18 },
+  completeReviewBtn:   { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, paddingVertical: 11, paddingHorizontal: Spacing.lg, borderRadius: Radius.md, borderWidth: 1, width: '100%', justifyContent: 'center', marginTop: Spacing.xs },
+  completeReviewBtnTxt:{ fontFamily: Fonts.monoBold, fontSize: 12, letterSpacing: 0.5 },
+  completeGotItBtn:    { paddingVertical: 13, paddingHorizontal: Spacing.xl, borderRadius: Radius.md, width: '100%', alignItems: 'center' },
+  completeGotItTxt:    { fontFamily: Fonts.orbitron, fontSize: 12, color: '#000', letterSpacing: 1 },
 });

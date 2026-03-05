@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HYPE Card — MotiCoach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Nunito:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* ─── Reset ──────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ─── Design tokens ──────────────────────────── */
+  :root {
+    --warm-white: #fdf9f4;
+    --linen:      #f0ece6;
+    --gold:       #c9973a;
+    --gold-light: #e8b84b;
+    --coral:      #e8735a;
+    --teal:       #3a8c8c;
+    --slate:      #2d3a4a;
+    --muted:      #8a8070;
+    --card-dark:  #1a2332;
+    --card-mid:   #243044;
+
+    --ff-display: 'Playfair Display', serif;
+    --ff-ui:      'Nunito', sans-serif;
+    --ff-body:    'DM Sans', sans-serif;
+
+    --card-w: 340px;
+    --card-h: 520px;
+    --radius: 20px;
+  }
+
+  body {
+    font-family: var(--ff-body);
+    background: var(--linen);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 16px 80px;
+    gap: 32px;
+  }
+
+  /* ─── Page label ─────────────────────────────── */
+  .page-label {
+    font-family: var(--ff-ui);
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  /* ─── Card wrapper / fold flip ───────────────── */
+  .card-scene {
+    width: var(--card-w);
+    height: var(--card-h);
+    position: relative;
+  }
+
+  .card-face {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
+    overflow: hidden;
+    backface-visibility: hidden;
+    transition: transform 0.25s ease-in, opacity 0.25s ease-in;
+    transform-origin: center center;
+    transform: scaleX(1);
+    will-change: transform, opacity;
+  }
+
+  /* Flip states */
+  .card-scene.flipped .face-front {
+    transform: scaleX(0);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .card-scene.flipped .face-back {
+    transform: scaleX(1);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .face-back {
+    transform: scaleX(0);
+    opacity: 0;
+    pointer-events: none;
+    transition-delay: 0.12s;
+  }
+
+  /* ═══════════════════════════════════════════════
+     FRONT FACE — dark card
+  ═══════════════════════════════════════════════ */
+  .face-front {
+    background: linear-gradient(160deg, #243044 0%, #1a2332 60%, #111b28 100%);
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* Gold edge line */
+  .face-front::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
+    border: 2px solid rgba(201,151,58,.35);
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* Subtle noise texture overlay */
+  .face-front::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.5;
+    z-index: 1;
+  }
+
+  /* Flip hint */
+  .flip-hint {
+    position: absolute;
+    bottom: 14px;
+    right: 16px;
+    font-family: var(--ff-ui);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: rgba(201,151,58,.5);
+    text-transform: uppercase;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .flip-hint svg { opacity: .6; }
+
+  /* ── Avatar zone ─────────────────────────────── */
+  .avatar-zone {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .avatar-glow {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(201,151,58,.18) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .avatar-silhouette {
+    width: 180px;
+    height: 220px;
+    position: relative;
+    z-index: 2;
+    opacity: 0.92;
+  }
+
+  /* Jersey number watermark */
+  .jersey-watermark {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--ff-display);
+    font-weight: 900;
+    font-size: 96px;
+    color: rgba(255,255,255,.05);
+    letter-spacing: -4px;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Sport badge */
+  .sport-badge {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(201,151,58,.15);
+    border: 1px solid rgba(201,151,58,.4);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-family: var(--ff-ui);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--gold);
+    text-transform: uppercase;
+    z-index: 5;
+  }
+
+  /* Season tag */
+  .season-tag {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    font-family: var(--ff-ui);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,.25);
+    text-transform: uppercase;
+    z-index: 5;
+  }
+
+  /* ── Name plate ──────────────────────────────── */
+  .name-plate {
+    padding: 12px 20px 0;
+    position: relative;
+    z-index: 3;
+  }
+  .name-plate .first-name {
+    font-family: var(--ff-display);
+    font-weight: 700;
+    font-size: 15px;
+    color: rgba(255,255,255,.55);
+    letter-spacing: 1px;
+    line-height: 1;
+  }
+  .name-plate .last-name {
+    font-family: var(--ff-display);
+    font-weight: 900;
+    font-size: 30px;
+    color: #fff;
+    letter-spacing: -0.5px;
+    line-height: 1.05;
+  }
+  .name-plate .team-pos {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .name-plate .team-name {
+    font-family: var(--ff-ui);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+  .name-plate .dot { color: rgba(255,255,255,.2); font-size: 10px; }
+  .name-plate .position {
+    font-family: var(--ff-ui);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: rgba(255,255,255,.4);
+    text-transform: uppercase;
+  }
+
+  /* ── Stat strip ──────────────────────────────── */
+  .stat-strip {
+    display: flex;
+    padding: 14px 20px 20px;
+    gap: 0;
+    position: relative;
+    z-index: 3;
+  }
+  .stat-strip::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 20px;
+    right: 20px;
+    height: 1px;
+    background: rgba(255,255,255,.08);
+  }
+  .stat-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .stat-item + .stat-item {
+    border-left: 1px solid rgba(255,255,255,.07);
+  }
+  .stat-val {
+    font-family: var(--ff-display);
+    font-weight: 900;
+    font-size: 22px;
+    color: #fff;
+    line-height: 1;
+  }
+  .stat-val.highlight { color: var(--gold); }
+  .stat-lbl {
+    font-family: var(--ff-ui);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: rgba(255,255,255,.3);
+    text-transform: uppercase;
+  }
+
+  /* Jersey number chip (bottom-left corner) */
+  .jersey-chip {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(201,151,58,.15);
+    border: 1.5px solid rgba(201,151,58,.35);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+  }
+  .jersey-chip .num {
+    font-family: var(--ff-display);
+    font-weight: 900;
+    font-size: 16px;
+    color: var(--gold);
+    line-height: 1;
+  }
+  .jersey-chip .lbl {
+    font-family: var(--ff-ui);
+    font-size: 6px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: rgba(201,151,58,.5);
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     BACK FACE — warm white card
+  ═══════════════════════════════════════════════ */
+  .face-back {
+    background: var(--warm-white);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .back-header {
+    background: var(--slate);
+    padding: 14px 18px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .back-header .athlete-mini {
+    display: flex;
+    flex-direction: column;
+  }
+  .back-header .back-name {
+    font-family: var(--ff-display);
+    font-weight: 900;
+    font-size: 15px;
+    color: #fff;
+    line-height: 1;
+  }
+  .back-header .back-sub {
+    font-family: var(--ff-ui);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .back-flip-btn {
+    background: none;
+    border: 1.5px solid rgba(255,255,255,.2);
+    border-radius: 8px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-family: var(--ff-ui);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: rgba(255,255,255,.5);
+    text-transform: uppercase;
+    transition: border-color .15s, color .15s;
+  }
+  .back-flip-btn:hover {
+    border-color: rgba(255,255,255,.4);
+    color: rgba(255,255,255,.85);
+  }
+
+  .back-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--linen) transparent;
+  }
+
+  /* ── Section label ───────────────────────────── */
+  .section-label {
+    font-family: var(--ff-ui);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  /* ── Games section ───────────────────────────── */
+  .games-list { display: flex; flex-direction: column; gap: 6px; }
+  .game-row {
+    background: var(--linen);
+    border-radius: 10px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .game-date-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 30px;
+  }
+  .game-month {
+    font-family: var(--ff-ui);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--coral);
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .game-day {
+    font-family: var(--ff-display);
+    font-weight: 900;
+    font-size: 18px;
+    color: var(--slate);
+    line-height: 1;
+  }
+  .game-info { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+  .game-opp {
+    font-family: var(--ff-ui);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--slate);
+  }
+  .game-detail {
+    font-family: var(--ff-body);
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .game-type {
+    font-family: var(--ff-ui);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    text-transform: uppercase;
+  }
+  .game-type.home {
+    background: rgba(58,140,140,.12);
+    color: var(--teal);
+  }
+  .game-type.away {
+    background: rgba(232,115,90,.1);
+    color: var(--coral);
+  }
+
+  /* ── Stats section ───────────────────────────── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .stat-box {
+    background: var(--linen);
+    border-radius: 10px;
+    padding: 8px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .stat-box .val {
+    font-family: var(--ff-display);
+    font-weight: 900;
+    font-size: 20px;
+    color: var(--slate);
+    line-height: 1;
+  }
+  .stat-box .val.accent { color: var(--teal); }
+  .stat-box .lbl {
+    font-family: var(--ff-ui);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  /* ── Highlights section ──────────────────────── */
+  .highlights-zone {
+    border: 1.5px dashed rgba(201,151,58,.35);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .highlights-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+  }
+  .highlights-empty .icon {
+    font-size: 24px;
+    opacity: .5;
+  }
+  .highlights-empty p {
+    font-family: var(--ff-body);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .upload-btn {
+    align-self: center;
+    background: none;
+    border: 1.5px solid var(--gold);
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-family: var(--ff-ui);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: var(--gold);
+    text-transform: uppercase;
+    transition: background .15s, color .15s;
+  }
+  .upload-btn:hover {
+    background: var(--gold);
+    color: var(--warm-white);
+  }
+
+  /* ═══════════════════════════════════════════════
+     SHOUTOUT SECTION
+  ═══════════════════════════════════════════════ */
+  .shoutout-section { display: flex; flex-direction: column; gap: 8px; }
+
+  /* Athlete pills row */
+  .athlete-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .athlete-pill {
+    background: var(--linen);
+    border: 1.5px solid transparent;
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-family: var(--ff-ui);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--slate);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s, transform .1s;
+    user-select: none;
+  }
+  .athlete-pill:hover {
+    border-color: var(--coral);
+    color: var(--coral);
+  }
+  .athlete-pill.selected {
+    background: var(--coral);
+    border-color: var(--coral);
+    color: #fff;
+    transform: scale(1.04);
+  }
+
+  /* Cheer grid — slides in */
+  .cheer-grid-wrap {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height .3s cubic-bezier(.4,0,.2,1), opacity .2s ease;
+    opacity: 0;
+  }
+  .cheer-grid-wrap.visible {
+    max-height: 200px;
+    opacity: 1;
+  }
+  .cheer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding-top: 2px;
+  }
+  .cheer-btn {
+    background: var(--linen);
+    border: 1.5px solid transparent;
+    border-radius: 10px;
+    padding: 9px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--ff-ui);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--slate);
+    transition: border-color .15s, background .15s, color .15s, transform .12s;
+    text-align: left;
+    user-select: none;
+  }
+  .cheer-btn:hover {
+    border-color: var(--teal);
+    color: var(--teal);
+    transform: translateY(-1px);
+  }
+  .cheer-btn.sent {
+    background: rgba(58,140,140,.1);
+    border-color: var(--teal);
+    color: var(--teal);
+    pointer-events: none;
+  }
+  .cheer-btn .cheer-emoji { font-size: 16px; flex-shrink: 0; }
+
+  /* Shoutout feed */
+  .shoutout-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height .3s ease;
+  }
+  .shoutout-feed.has-items { max-height: 200px; }
+
+  .feed-item {
+    background: rgba(58,140,140,.07);
+    border-left: 2.5px solid var(--teal);
+    border-radius: 0 8px 8px 0;
+    padding: 6px 10px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    animation: feedIn .25s ease;
+  }
+  @keyframes feedIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .feed-cheer {
+    font-family: var(--ff-ui);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--slate);
+    flex: 1;
+  }
+  .feed-for {
+    font-family: var(--ff-ui);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--teal);
+  }
+  .feed-ts {
+    font-family: var(--ff-body);
+    font-size: 9px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  /* ─── Flip toggle button (below card) ───────── */
+  .toggle-row {
+    display: flex;
+    gap: 10px;
+  }
+  .toggle-btn {
+    background: none;
+    border: 1.5px solid rgba(45,58,74,.2);
+    border-radius: 10px;
+    padding: 8px 20px;
+    cursor: pointer;
+    font-family: var(--ff-ui);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--muted);
+    text-transform: uppercase;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .toggle-btn:hover, .toggle-btn.active {
+    border-color: var(--slate);
+    color: var(--slate);
+    background: rgba(45,58,74,.06);
+  }
+</style>
+</head>
+<body>
+
+<p class="page-label">HYPE Card — Game Day</p>
+
+<!-- ══════════════════ CARD ══════════════════ -->
+<div class="card-scene" id="card">
+
+  <!-- ───────── FRONT ───────── -->
+  <div class="face-front card-face" onclick="flipCard()">
+
+    <div class="season-tag">2025 · 26</div>
+    <div class="sport-badge">⚽ Soccer</div>
+
+    <!-- Avatar zone -->
+    <div class="avatar-zone">
+      <div class="jersey-watermark">7</div>
+      <div class="avatar-glow"></div>
+      <!-- SVG silhouette placeholder -->
+      <svg class="avatar-silhouette" viewBox="0 0 180 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Head -->
+        <ellipse cx="90" cy="38" rx="26" ry="28" fill="rgba(255,255,255,.12)" />
+        <!-- Neck -->
+        <rect x="80" y="62" width="20" height="16" rx="4" fill="rgba(255,255,255,.1)" />
+        <!-- Torso / jersey -->
+        <path d="M40 82 C40 78 56 72 80 72 L100 72 C124 72 140 78 140 82 L148 150 C148 154 144 158 140 158 L40 158 C36 158 32 154 32 150 Z" fill="rgba(255,255,255,.1)" />
+        <!-- Jersey number on chest -->
+        <text x="90" y="128" text-anchor="middle" font-family="Georgia,serif" font-weight="900" font-size="28" fill="rgba(255,255,255,.18)">7</text>
+        <!-- Arms -->
+        <path d="M40 85 L18 138 C16 143 18 148 23 149 L34 150 L48 108 Z" fill="rgba(255,255,255,.08)" />
+        <path d="M140 85 L162 138 C164 143 162 148 157 149 L146 150 L132 108 Z" fill="rgba(255,255,255,.08)" />
+        <!-- Shorts -->
+        <path d="M40 158 L32 198 L72 198 L90 168 L108 198 L148 198 L140 158 Z" fill="rgba(255,255,255,.07)" />
+        <!-- Legs -->
+        <rect x="36" y="196" width="34" height="22" rx="6" fill="rgba(255,255,255,.06)" />
+        <rect x="110" y="196" width="34" height="22" rx="6" fill="rgba(255,255,255,.06)" />
+      </svg>
+    </div>
+
+    <!-- Name plate -->
+    <div class="name-plate">
+      <div class="first-name">Marcus</div>
+      <div class="last-name">Reynolds</div>
+      <div class="team-pos">
+        <span class="team-name">Lightning FC</span>
+        <span class="dot">·</span>
+        <span class="position">Forward</span>
+      </div>
+    </div>
+
+    <!-- Stat strip -->
+    <div class="stat-strip">
+      <div class="stat-item">
+        <span class="stat-val highlight">12</span>
+        <span class="stat-lbl">Goals</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-val">7</span>
+        <span class="stat-lbl">Assists</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-val">18</span>
+        <span class="stat-lbl">Games</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-val highlight">86%</span>
+        <span class="stat-lbl">Shot %</span>
+      </div>
+    </div>
+
+    <!-- Jersey chip -->
+    <div class="jersey-chip">
+      <span class="num">7</span>
+      <span class="lbl">#</span>
+    </div>
+
+    <div class="flip-hint">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M1 5 Q2 1 5 1 Q8 1 9 4" stroke="#c9973a" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <polyline points="7,2 9,4 7,5.5" stroke="#c9973a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+      Flip
+    </div>
+  </div>
+
+  <!-- ───────── BACK ───────── -->
+  <div class="face-back card-face">
+
+    <div class="back-header">
+      <div class="athlete-mini">
+        <span class="back-name">Marcus Reynolds</span>
+        <span class="back-sub">Lightning FC · #7</span>
+      </div>
+      <button class="back-flip-btn" onclick="flipCard()">↩ Flip</button>
+    </div>
+
+    <div class="back-scroll">
+
+      <!-- Upcoming games -->
+      <div>
+        <div class="section-label">Upcoming Games</div>
+        <div class="games-list">
+          <div class="game-row">
+            <div class="game-date-block">
+              <span class="game-month">Mar</span>
+              <span class="game-day">8</span>
+            </div>
+            <div class="game-info">
+              <span class="game-opp">vs. River Hawks</span>
+              <span class="game-detail">2:00 PM · Riverside Park</span>
+            </div>
+            <span class="game-type home">Home</span>
+          </div>
+          <div class="game-row">
+            <div class="game-date-block">
+              <span class="game-month">Mar</span>
+              <span class="game-day">15</span>
+            </div>
+            <div class="game-info">
+              <span class="game-opp">vs. Crestview United</span>
+              <span class="game-detail">10:00 AM · Crestview Stadium</span>
+            </div>
+            <span class="game-type away">Away</span>
+          </div>
+          <div class="game-row">
+            <div class="game-date-block">
+              <span class="game-month">Mar</span>
+              <span class="game-day">22</span>
+            </div>
+            <div class="game-info">
+              <span class="game-opp">vs. Eagles SC</span>
+              <span class="game-detail">1:00 PM · Town Green</span>
+            </div>
+            <span class="game-type home">Home</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Season stats -->
+      <div>
+        <div class="section-label">Season Stats</div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <span class="val accent">12</span>
+            <span class="lbl">Goals</span>
+          </div>
+          <div class="stat-box">
+            <span class="val">7</span>
+            <span class="lbl">Assists</span>
+          </div>
+          <div class="stat-box">
+            <span class="val">18</span>
+            <span class="lbl">Games</span>
+          </div>
+          <div class="stat-box">
+            <span class="val">86%</span>
+            <span class="lbl">Shot %</span>
+          </div>
+          <div class="stat-box">
+            <span class="val accent">3</span>
+            <span class="lbl">Hat-tricks</span>
+          </div>
+          <div class="stat-box">
+            <span class="val">24</span>
+            <span class="lbl">Shots</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Highlights -->
+      <div>
+        <div class="section-label">Highlights</div>
+        <div class="highlights-zone">
+          <div class="highlights-empty">
+            <div class="icon">🎬</div>
+            <p>Supporters can upload<br />game-day clips here</p>
+          </div>
+          <button class="upload-btn">+ Add Clip</button>
+        </div>
+      </div>
+
+      <!-- ══ Shoutout selector ══ -->
+      <div class="shoutout-section" id="shoutoutSection">
+        <div class="section-label">Game-Day Shoutout</div>
+
+        <!-- Athlete pills -->
+        <div class="athlete-pills" id="athletePills">
+          <button class="athlete-pill" onclick="selectAthlete(this, 'Marcus')">Marcus</button>
+          <button class="athlete-pill" onclick="selectAthlete(this, 'Jordan')">Jordan</button>
+          <button class="athlete-pill" onclick="selectAthlete(this, 'Priya')">Priya</button>
+          <button class="athlete-pill" onclick="selectAthlete(this, 'Leo')">Leo</button>
+          <button class="athlete-pill" onclick="selectAthlete(this, 'Aiko')">Aiko</button>
+        </div>
+
+        <!-- Cheer grid (slides in after athlete selected) -->
+        <div class="cheer-grid-wrap" id="cheerGridWrap">
+          <div class="cheer-grid" id="cheerGrid">
+            <!-- populated by JS -->
+          </div>
+        </div>
+
+        <!-- Shoutout feed -->
+        <div class="shoutout-feed" id="shoutoutFeed">
+          <!-- feed items appended by JS -->
+        </div>
+      </div>
+
+    </div><!-- /back-scroll -->
+  </div><!-- /face-back -->
+
+</div><!-- /card-scene -->
+
+<!-- Toggle buttons (demo controls) -->
+<div class="toggle-row">
+  <button class="toggle-btn active" id="btnFront" onclick="showFace('front')">Front</button>
+  <button class="toggle-btn" id="btnBack" onclick="showFace('back')">Back</button>
+</div>
+
+<!-- ══════════════ JAVASCRIPT ══════════════ -->
+<script>
+  // ── Flip mechanic ───────────────────────────────────
+  const card = document.getElementById('card');
+
+  function flipCard() {
+    card.classList.toggle('flipped');
+    document.getElementById('btnFront').classList.toggle('active', !card.classList.contains('flipped'));
+    document.getElementById('btnBack').classList.toggle('active',  card.classList.contains('flipped'));
+  }
+
+  function showFace(face) {
+    const flipped = face === 'back';
+    card.classList.toggle('flipped', flipped);
+    document.getElementById('btnFront').classList.toggle('active', !flipped);
+    document.getElementById('btnBack').classList.toggle('active',  flipped);
+  }
+
+  // ── Sport-specific cheers ────────────────────────────
+  const SPORT_CHEERS = {
+    soccer: [
+      { emoji: '⚽', text: 'Great touch!' },
+      { emoji: '🔥', text: 'On fire today!' },
+      { emoji: '💪', text: 'Unstoppable!' },
+      { emoji: '🎯', text: 'Pinpoint pass!' },
+      { emoji: '🦁', text: 'Pure heart!' },
+      { emoji: '👑', text: 'That\'s a baller!' },
+    ],
+  };
+
+  const cheers = SPORT_CHEERS.soccer; // swap for other sports
+
+  // ── State ────────────────────────────────────────────
+  let selectedAthlete = null;
+  const sentCheers = new Set(); // track sent cheer indices per session
+
+  // ── Athlete pill selection ───────────────────────────
+  function selectAthlete(pill, name) {
+    // deselect all pills
+    document.querySelectorAll('.athlete-pill').forEach(p => p.classList.remove('selected'));
+    pill.classList.add('selected');
+    selectedAthlete = name;
+
+    // reset sent cheers for new athlete selection
+    sentCheers.clear();
+    renderCheers();
+    showCheers(true);
+  }
+
+  // ── Render cheer buttons ─────────────────────────────
+  function renderCheers() {
+    const grid = document.getElementById('cheerGrid');
+    grid.innerHTML = '';
+    cheers.forEach((cheer, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'cheer-btn' + (sentCheers.has(i) ? ' sent' : '');
+      btn.innerHTML = `<span class="cheer-emoji">${cheer.emoji}</span>${cheer.text}`;
+      btn.onclick = () => sendCheer(i, cheer, btn);
+      grid.appendChild(btn);
+    });
+  }
+
+  // ── Show/hide cheer grid ─────────────────────────────
+  function showCheers(show) {
+    const wrap = document.getElementById('cheerGridWrap');
+    wrap.classList.toggle('visible', show);
+  }
+
+  // ── Send a cheer ─────────────────────────────────────
+  function sendCheer(index, cheer, btn) {
+    if (!selectedAthlete) return;
+    sentCheers.add(index);
+
+    // mark button as sent
+    btn.classList.add('sent');
+
+    // append to feed
+    addFeedItem(selectedAthlete, cheer);
+
+    // brief pulse on pill
+    const activePill = document.querySelector('.athlete-pill.selected');
+    if (activePill) {
+      activePill.style.transform = 'scale(1.12)';
+      setTimeout(() => activePill.style.transform = '', 200);
+    }
+  }
+
+  // ── Add item to shoutout feed ────────────────────────
+  function addFeedItem(athlete, cheer) {
+    const feed = document.getElementById('shoutoutFeed');
+    feed.classList.add('has-items');
+
+    const now = new Date();
+    const ts = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const item = document.createElement('div');
+    item.className = 'feed-item';
+    item.innerHTML = `
+      <span class="feed-cheer">${cheer.emoji} ${cheer.text}</span>
+      <span class="feed-for">for ${athlete}</span>
+      <span class="feed-ts">${ts}</span>
+    `;
+
+    // prepend so newest is on top
+    feed.insertBefore(item, feed.firstChild);
+
+    // expand feed height (CSS max-height handles animation)
+  }
+</script>
+</body>
+</html>

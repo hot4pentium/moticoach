@@ -4,11 +4,13 @@
 ## Current Focus
 _What we're working on right now_
 
-Game Day Live Engagement sprint — implemented supporter live session screen, fan tap mechanic, shoutout grid, and athlete fan support dashboard.
+Org demo outreach prep — expanded DemoCoachesScreen with 3 interactive sub-levels and unlocked paid features for testcoach@mail.com.
 
 ## Recent Changes
 _Last few things completed_
 
+- **DemoCoachesScreen** (`src/screens/DemoCoachesScreen.tsx`): Added 3 interactive sub-levels reachable from coach-view Quick Actions: `playbook` (6 demo plays with filter tabs and field thumbnails), `stat-demo` (live score bar + 6 stat tiles + tappable player rows with ✓ RECORDED flash), `live-taps` (animated LIVE TAP button + 6-player shoutout grid). Quick Actions expanded to 5 cards (Stat Tracker, Roster, Playbook, Team Chat, Game Day) — tappable cards have cyan border accent.
+- **Firestore** (`teams/GG354`): Set `isPaid: true` via REST API — unlocks PrepBook, individual stat tracking, and all paid features for `testcoach@mail.com`.
 - **GameDayLiveScreen** (`src/screens/GameDayLiveScreen.tsx`): New screen. Supporters enter a 2-hour session (pregame confirm → active → paused/halftime → ended). Live Taps button (3 taps = +1 point). 3-column alphabetical shoutout grid for roster players. 15-min extension prompt (+30/+60 min). End session → batch upload to Firestore `teams/{teamCode}/gameEngagements`.
 - **SupporterHomeScreen** (`src/screens/SupporterHomeScreen.tsx`): GameDayLiveCard upgraded from static placeholder to a tappable nav button → GameDayLiveScreen.
 - **AthleteProfileScreen** (`src/screens/AthleteProfileScreen.tsx`): Added FAN SUPPORT card (shows team live taps + personal shoutout count if > 0). Post-game celebration modal fires once per engagement (localStorage-gated). Uses `onSnapshot` on `teams/{teamCode}/gameEngagements`.

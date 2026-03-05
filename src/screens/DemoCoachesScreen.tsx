@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Fonts, AR, AS, AdminSection, ACPalette } from '../lib/adminTheme';
 import { Colors, Spacing, Radius } from '../theme';
@@ -11,7 +11,50 @@ interface Props {
   initialCoachId?: string;
 }
 
-type Level = 'directory' | 'profile' | 'coach-view';
+type Level = 'directory' | 'profile' | 'coach-view' | 'playbook' | 'stat-demo' | 'live-taps';
+
+const DEMO_PLAYS = [
+  { id: '1', name: '4-3-3 High Press',  cat: 'OFFENSE',   color: Colors.green  },
+  { id: '2', name: '2-3 Zone Defense',  cat: 'DEFENSE',   color: Colors.red    },
+  { id: '3', name: 'Corner Routine A',  cat: 'SET PIECE', color: Colors.amber  },
+  { id: '4', name: 'Counter Attack',    cat: 'OFFENSE',   color: Colors.green  },
+  { id: '5', name: 'Pressing Trap',     cat: 'DEFENSE',   color: Colors.red    },
+  { id: '6', name: 'Free Kick Wall',    cat: 'SET PIECE', color: Colors.amber  },
+];
+
+const SOCCER_DEMO_STATS = [
+  { key: 'goals',   label: 'GOALS'   },
+  { key: 'assists', label: 'ASSISTS' },
+  { key: 'saves',   label: 'SAVES'   },
+  { key: 'shots',   label: 'SHOTS'   },
+  { key: 'tackles', label: 'TACKLES' },
+  { key: 'corners', label: 'CORNERS' },
+];
+
+const PRESET_PLAYER_STATS: Record<number, Record<string, number>> = {
+  0: { goals: 2, assists: 1 },
+  1: { assists: 2 },
+  2: { saves: 4 },
+  3: { goals: 1, tackles: 3 },
+  4: { goals: 1 },
+  5: { corners: 2 },
+};
+
+const PRESET_SHOUTOUTS = [5, 3, 7, 2, 4, 1, 8, 3, 6];
+
+const DEMO_SHOUTOUT_PLAYERS = [
+  { name: 'Jordan Smith',  jersey: 10 },
+  { name: 'Maya Torres',   jersey: 7  },
+  { name: 'Eli Johnson',   jersey: 4  },
+  { name: 'Chloe Davis',   jersey: 9  },
+  { name: 'Noah Wilson',   jersey: 11 },
+  { name: 'Sam Liu',       jersey: 3  },
+  { name: 'Aiden Scott',   jersey: 8  },
+  { name: 'Emma Park',     jersey: 6  },
+  { name: 'Ryan James',    jersey: 2  },
+];
+
+const PLAY_FILTERS = ['ALL', 'OFFENSE', 'DEFENSE', 'SET PIECE'];
 
 export default function DemoCoachesScreen({ navigate, initialCoachId }: Props) {
   const AC = useDemoAC();
@@ -27,6 +70,15 @@ export default function DemoCoachesScreen({ navigate, initialCoachId }: Props) {
   const initialCoach = initialCoachId ? DEMO_COACHES.find(c => c.id === initialCoachId) ?? null : null;
   const [level, setLevel]               = useState<Level>(initialCoach ? 'profile' : 'directory');
   const [selectedCoach, setSelectedCoach] = useState<DemoCoach | null>(initialCoach);
+
+  // Stat demo state
+  const [selectedStatKey, setSelectedStatKey] = useState<string>('goals');
+  const [recentlyTrackedId, setRecentlyTrackedId] = useState<string | null>(null);
+
+  // Live taps state
+  const [tapCount, setTapCount] = useState(0);
+  const [shoutouts, setShoutouts] = useState<Record<string, number>>({});
+  const tapScaleAnim = useRef(new Animated.Value(1)).current;
 
   // Coaches grouped by league, in league order (soccer only for now)
   const leagueGroups = useMemo(() => {
@@ -171,6 +223,244 @@ export default function DemoCoachesScreen({ navigate, initialCoachId }: Props) {
     );
   }
 
+  // ── Playbook demo level ──────────────────────────────────────────────────────
+  if (level === 'playbook' && selectedCoach) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+        <View style={cv.banner}>
+          <TouchableOpacity onPress={() => setLevel('coach-view')} style={cv.bannerBack}>
+            <Ionicons name="arrow-back" size={16} color="#fff" />
+            <Text style={cv.bannerBackTxt}>Coach Dashboard</Text>
+          </TouchableOpacity>
+          <View style={cv.bannerBadge}>
+            <Ionicons name="eye-outline" size={12} color="#fff" />
+            <Text style={cv.bannerBadgeTxt}>Admin Preview</Text>
+          </View>
+        </View>
+
+        <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+          <View style={cv.section}>
+            <Text style={cv.sectionLabel}>PLAYBOOK</Text>
+            <Text style={{ fontFamily: Fonts.rajdhaniBold, fontSize: 22, color: '#fff', marginBottom: Spacing.md }}>
+              {DEMO_PLAYS.length} Plays
+            </Text>
+
+            {/* Filter tabs */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
+              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                {PLAY_FILTERS.map(f => (
+                  <View key={f} style={[cv.filterTab, f === 'ALL' && cv.filterTabActive]}>
+                    <Text style={[cv.filterTabTxt, f === 'ALL' && cv.filterTabTxtActive]}>{f}</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Play grid */}
+            <View style={cv.playGrid}>
+              {DEMO_PLAYS.map(play => (
+                <View key={play.id} style={cv.playCard}>
+                  <View style={[cv.playAccent, { backgroundColor: play.color }]} />
+                  <View style={cv.playThumb}>
+                    <View style={cv.fieldCircle} />
+                    <View style={cv.fieldLine} />
+                  </View>
+                  <View style={cv.playInfo}>
+                    <Text style={cv.playName}>{play.name}</Text>
+                    <View style={[cv.catTag, { borderColor: play.color }]}>
+                      <Text style={[cv.catTagTxt, { color: play.color }]}>{play.cat}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ── Stat demo level ──────────────────────────────────────────────────────────
+  if (level === 'stat-demo' && selectedCoach) {
+    const roster = (DEMO_ROSTER_PREVIEW[selectedCoach.teamId] ?? []).slice(0, 6);
+
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+        <View style={cv.banner}>
+          <TouchableOpacity onPress={() => setLevel('coach-view')} style={cv.bannerBack}>
+            <Ionicons name="arrow-back" size={16} color="#fff" />
+            <Text style={cv.bannerBackTxt}>Coach Dashboard</Text>
+          </TouchableOpacity>
+          <View style={cv.bannerBadge}>
+            <Ionicons name="eye-outline" size={12} color="#fff" />
+            <Text style={cv.bannerBadgeTxt}>Admin Preview</Text>
+          </View>
+        </View>
+
+        <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+          {/* Score bar */}
+          <View style={cv.section}>
+            <Text style={cv.sectionLabel}>STAT TRACKER — LIVE</Text>
+            <View style={cv.scoreBar}>
+              <Text style={cv.scoreTeam}>RIVERSIDE UTD</Text>
+              <View style={cv.scoreBox}>
+                <Text style={cv.scoreNum}>2</Text>
+                <Text style={cv.scoreSep}>:</Text>
+                <Text style={cv.scoreNum}>1</Text>
+              </View>
+              <Text style={cv.scoreTeam}>HAWKS FC</Text>
+            </View>
+            <View style={cv.modeChip}>
+              <Text style={cv.modeChipTxt}>INDIVIDUAL MODE · TAP STAT → TAP PLAYER</Text>
+            </View>
+          </View>
+
+          {/* Stat tiles */}
+          <View style={cv.section}>
+            <Text style={cv.sectionLabel}>SELECT A STAT</Text>
+            <View style={cv.statGrid}>
+              {SOCCER_DEMO_STATS.map(stat => (
+                <TouchableOpacity
+                  key={stat.key}
+                  style={cv.statTileWrap}
+                  onPress={() => setSelectedStatKey(stat.key)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[cv.statTileCard, selectedStatKey === stat.key && cv.statTileCardSel]}>
+                    <Text style={[cv.statTileLabel, selectedStatKey === stat.key && cv.statTileLabelSel]}>
+                      {stat.label}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Player rows */}
+          <View style={cv.section}>
+            <Text style={cv.sectionLabel}>TAP A PLAYER TO RECORD</Text>
+            <View style={cv.rosterCard}>
+              {roster.map((p, i) => {
+                const ps = PRESET_PLAYER_STATS[i] ?? {};
+                const isRecent = recentlyTrackedId === `${p.jersey}`;
+                return (
+                  <TouchableOpacity
+                    key={p.jersey}
+                    style={[
+                      cv.statPlayerRow,
+                      i > 0 && { borderTopWidth: 1, borderTopColor: Colors.border },
+                      isRecent && cv.statPlayerRowRecent,
+                    ]}
+                    onPress={() => {
+                      setRecentlyTrackedId(`${p.jersey}`);
+                      setTimeout(() => setRecentlyTrackedId(null), 750);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={cv.rosterNum}>#{p.jersey}</Text>
+                    <Text style={cv.rosterName}>{p.name}</Text>
+                    <Text style={cv.rosterPos}>{p.pos}</Text>
+                    {isRecent ? (
+                      <View style={cv.recordedBadge}>
+                        <Text style={cv.recordedBadgeTxt}>✓ RECORDED</Text>
+                      </View>
+                    ) : (
+                      <View style={cv.statBadgeRow}>
+                        {Object.entries(ps).map(([k, v]) => (
+                          <View key={k} style={cv.statCount}>
+                            <Text style={cv.statCountTxt}>{v} {k.substring(0, 3).toUpperCase()}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ── Live taps demo level ─────────────────────────────────────────────────────
+  if (level === 'live-taps' && selectedCoach) {
+    const liveRoster = DEMO_ROSTER_PREVIEW[selectedCoach.teamId]?.length
+      ? DEMO_ROSTER_PREVIEW[selectedCoach.teamId].slice(0, 9).map(p => ({ name: p.name, jersey: p.jersey }))
+      : DEMO_SHOUTOUT_PLAYERS;
+
+    const handleTap = () => {
+      setTapCount(c => c + 1);
+      Animated.sequence([
+        Animated.timing(tapScaleAnim, { toValue: 0.92, duration: 80, useNativeDriver: true }),
+        Animated.timing(tapScaleAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
+      ]).start();
+    };
+
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+        <View style={cv.banner}>
+          <TouchableOpacity onPress={() => setLevel('coach-view')} style={cv.bannerBack}>
+            <Ionicons name="arrow-back" size={16} color="#fff" />
+            <Text style={cv.bannerBackTxt}>Coach Dashboard</Text>
+          </TouchableOpacity>
+          <View style={cv.bannerBadge}>
+            <Ionicons name="eye-outline" size={12} color="#fff" />
+            <Text style={cv.bannerBadgeTxt}>Admin Preview</Text>
+          </View>
+        </View>
+
+        <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+          <View style={cv.section}>
+            <Text style={cv.sectionLabel}>GAME DAY LIVE — FAN ENGAGEMENT</Text>
+            <View style={cv.liveBadgeRow}>
+              <View style={cv.liveDot} />
+              <Text style={cv.liveChipTxt}>LIVE · Riverside vs Hawks · Q3</Text>
+            </View>
+
+            {/* Tap button */}
+            <View style={{ alignItems: 'center', marginTop: Spacing.xl, marginBottom: Spacing.lg }}>
+              <Animated.View style={{ transform: [{ scale: tapScaleAnim }] }}>
+                <TouchableOpacity style={cv.tapBtn} onPress={handleTap} activeOpacity={0.8}>
+                  <Ionicons name="flash" size={32} color={Colors.bg} />
+                  <Text style={cv.tapBtnTxt}>LIVE TAP</Text>
+                </TouchableOpacity>
+              </Animated.View>
+              <Text style={cv.tapCounter}>{tapCount}</Text>
+              <Text style={cv.tapCounterLabel}>TAPS · {Math.floor(tapCount / 3)} PTS</Text>
+            </View>
+
+            {/* Shoutout grid */}
+            <Text style={[cv.sectionLabel, { marginTop: Spacing.sm }]}>SHOUT OUT A PLAYER</Text>
+            <View style={cv.shoutGrid}>
+              {liveRoster.map((p, i) => {
+                const count = shoutouts[p.name] ?? PRESET_SHOUTOUTS[i] ?? 0;
+                const firstName = p.name.split(' ')[0];
+                const lastName = p.name.split(' ')[1] ?? '';
+                const isActive = (shoutouts[p.name] !== undefined) || (PRESET_SHOUTOUTS[i] > 0);
+                return (
+                  <TouchableOpacity
+                    key={p.jersey}
+                    style={[cv.shoutCell, isActive && cv.shoutCellActive]}
+                    onPress={() => setShoutouts(prev => ({ ...prev, [p.name]: (prev[p.name] ?? PRESET_SHOUTOUTS[i] ?? 0) + 1 }))}
+                    activeOpacity={0.7}
+                  >
+                    <View style={cv.shoutBadge}>
+                      <Text style={cv.shoutBadgeTxt}>{count}</Text>
+                    </View>
+                    <Text style={cv.shoutFirst}>{firstName}</Text>
+                    <Text style={cv.shoutLast}>{lastName}</Text>
+                    <Text style={cv.shoutJersey}>#{p.jersey}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   // ── Coach Dashboard view ─────────────────────────────────────────────────────
   if (level === 'coach-view' && selectedCoach) {
     const coach = selectedCoach;
@@ -185,11 +475,12 @@ export default function DemoCoachesScreen({ navigate, initialCoachId }: Props) {
     };
 
     const quickActions = [
-      { icon: 'stats-chart-outline', label: 'Stat Tracker' },
-      { icon: 'people-outline',      label: 'Roster'       },
-      { icon: 'book-outline',        label: 'Playbook'     },
-      { icon: 'chatbubbles-outline', label: 'Team Chat'    },
-    ] as const;
+      { icon: 'stats-chart-outline', label: 'Stat Tracker', dest: 'stat-demo' as Level },
+      { icon: 'people-outline',      label: 'Roster',       dest: null },
+      { icon: 'book-outline',        label: 'Playbook',     dest: 'playbook' as Level },
+      { icon: 'chatbubbles-outline', label: 'Team Chat',    dest: null },
+      { icon: 'flash-outline',       label: 'Game Day',     dest: 'live-taps' as Level },
+    ];
 
     return (
       <View style={{ flex: 1, backgroundColor: Colors.bg }}>
@@ -237,10 +528,21 @@ export default function DemoCoachesScreen({ navigate, initialCoachId }: Props) {
           <View style={cv.section}>
             <Text style={cv.sectionLabel}>QUICK ACTIONS</Text>
             <View style={cv.qaGrid}>
-              {quickActions.map(qa => (
-                <View key={qa.label} style={cv.qaCard}>
+              {quickActions.map(qa => qa.dest ? (
+                <TouchableOpacity
+                  key={qa.label}
+                  style={[cv.qaCard, cv.qaCardTappable]}
+                  onPress={() => setLevel(qa.dest!)}
+                  activeOpacity={0.75}
+                >
                   <Ionicons name={qa.icon as any} size={22} color={Colors.cyan} />
                   <Text style={cv.qaLabel}>{qa.label}</Text>
+                  <Ionicons name="chevron-forward" size={12} color={Colors.dim} style={{ position: 'absolute', top: 8, right: 8 }} />
+                </TouchableOpacity>
+              ) : (
+                <View key={qa.label} style={cv.qaCard}>
+                  <Ionicons name={qa.icon as any} size={22} color={Colors.dim} />
+                  <Text style={[cv.qaLabel, { color: Colors.dim }]}>{qa.label}</Text>
                 </View>
               ))}
             </View>
@@ -483,7 +785,8 @@ const cv = StyleSheet.create({
   eventTypeTxt:  { fontFamily: Fonts.monoBold, fontSize: 10, color: Colors.bg },
 
   qaGrid:        { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  qaCard:        { flex: 1, minWidth: '44%', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.card, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
+  qaCard:        { flex: 1, minWidth: '44%', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.card, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border, position: 'relative' },
+  qaCardTappable:{ borderColor: `${Colors.cyan}40` },
   qaLabel:       { fontFamily: Fonts.rajdhaniBold, fontSize: 13, color: '#fff', textAlign: 'center' },
 
   rosterCard:    { backgroundColor: Colors.card, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
@@ -494,4 +797,64 @@ const cv = StyleSheet.create({
   rosterEmpty:   { fontFamily: Fonts.rajdhani, fontSize: 14, color: Colors.muted, padding: Spacing.md },
 
   evDot:         { width: 8, height: 8, borderRadius: 4, marginTop: 3 },
+
+  // ── Playbook ──────────────────────────────────────────────────────────────
+  filterTab:        { paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border },
+  filterTabActive:  { borderColor: Colors.cyan, backgroundColor: `${Colors.cyan}15` },
+  filterTabTxt:     { fontFamily: Fonts.monoBold, fontSize: 11, color: Colors.dim },
+  filterTabTxtActive:{ color: Colors.cyan },
+
+  playGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  playCard:    { flex: 1, minWidth: '46%', backgroundColor: Colors.card, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
+  playAccent:  { height: 3 },
+  playThumb:   { height: 80, backgroundColor: Colors.bgDeep, alignItems: 'center', justifyContent: 'center' },
+  fieldCircle: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: `${Colors.green}50` },
+  fieldLine:   { position: 'absolute', left: 8, right: 8, top: 39, height: 1, backgroundColor: `${Colors.green}30` },
+  playInfo:    { padding: Spacing.sm },
+  playName:    { fontFamily: Fonts.rajdhaniBold, fontSize: 13, color: '#fff', marginBottom: 4 },
+  catTag:      { alignSelf: 'flex-start', borderWidth: 1, borderRadius: Radius.sm, paddingHorizontal: 4, paddingVertical: 1 },
+  catTagTxt:   { fontFamily: Fonts.monoBold, fontSize: 9 },
+
+  // ── Stat demo ─────────────────────────────────────────────────────────────
+  scoreBar:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.card, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, marginBottom: Spacing.sm },
+  scoreTeam:   { fontFamily: Fonts.monoBold, fontSize: 11, color: Colors.dim, flex: 1, textAlign: 'center' },
+  scoreBox:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  scoreNum:    { fontFamily: Fonts.orbitron, fontSize: 28, color: Colors.amber },
+  scoreSep:    { fontFamily: Fonts.orbitron, fontSize: 20, color: Colors.dim },
+  modeChip:    { backgroundColor: `${Colors.cyan}12`, borderRadius: Radius.sm, padding: Spacing.sm, alignItems: 'center', marginBottom: Spacing.xs },
+  modeChipTxt: { fontFamily: Fonts.monoBold, fontSize: 10, color: Colors.cyan, letterSpacing: 0.3 },
+
+  statGrid:         { flexDirection: 'row', flexWrap: 'wrap' },
+  statTileWrap:     { width: '33.33%', padding: 4 },
+  statTileCard:     { alignItems: 'center', paddingVertical: 14, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.card },
+  statTileCardSel:  { borderColor: Colors.cyan, backgroundColor: `${Colors.cyan}0d` },
+  statTileLabel:    { fontFamily: Fonts.monoBold, fontSize: 11, color: Colors.dim },
+  statTileLabelSel: { color: Colors.cyan },
+
+  statPlayerRow:       { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm + 2 },
+  statPlayerRowRecent: { backgroundColor: `${Colors.amber}10` },
+  recordedBadge:       { backgroundColor: `${Colors.green}20`, borderRadius: Radius.sm, paddingHorizontal: 6, paddingVertical: 2 },
+  recordedBadgeTxt:    { fontFamily: Fonts.monoBold, fontSize: 10, color: Colors.green },
+  statBadgeRow:        { flexDirection: 'row', gap: 4 },
+  statCount:           { backgroundColor: `${Colors.cyan}15`, borderRadius: Radius.sm, paddingHorizontal: 4, paddingVertical: 1 },
+  statCountTxt:        { fontFamily: Fonts.monoBold, fontSize: 9, color: Colors.cyan },
+
+  // ── Live taps ─────────────────────────────────────────────────────────────
+  liveBadgeRow:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: Spacing.xs },
+  liveDot:         { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.green },
+  liveChipTxt:     { fontFamily: Fonts.monoBold, fontSize: 11, color: Colors.dim },
+
+  tapBtn:          { width: 120, height: 120, borderRadius: 60, backgroundColor: Colors.amber, alignItems: 'center', justifyContent: 'center', gap: Spacing.xs },
+  tapBtnTxt:       { fontFamily: Fonts.monoBold, fontSize: 12, color: Colors.bg },
+  tapCounter:      { fontFamily: Fonts.orbitron, fontSize: 52, color: '#fff', marginTop: Spacing.md, textAlign: 'center' },
+  tapCounterLabel: { fontFamily: Fonts.monoBold, fontSize: 12, color: Colors.dim, textAlign: 'center' },
+
+  shoutGrid:       { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  shoutCell:       { flexBasis: '31%', flexGrow: 1, maxWidth: '33%', backgroundColor: Colors.bgDeep, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, padding: Spacing.sm, paddingTop: Spacing.md, alignItems: 'center', minHeight: 80, justifyContent: 'center', position: 'relative' },
+  shoutCellActive: { borderColor: `${Colors.amber}66`, backgroundColor: `${Colors.amber}0a` },
+  shoutBadge:      { position: 'absolute', top: 6, right: 6, width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.amber, alignItems: 'center', justifyContent: 'center' },
+  shoutBadgeTxt:   { fontFamily: Fonts.monoBold, fontSize: 9, color: Colors.bg },
+  shoutFirst:      { fontFamily: Fonts.rajdhaniBold, fontSize: 14, color: '#fff' },
+  shoutLast:       { fontFamily: Fonts.mono, fontSize: 11, color: Colors.dim },
+  shoutJersey:     { fontFamily: Fonts.mono, fontSize: 10, color: Colors.muted },
 });

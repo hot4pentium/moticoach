@@ -159,7 +159,7 @@ export default function AuthScreen({ onBack }: { onBack?: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent' },
+  container: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden' },
   kav:       { flex: 1 },
   backBtn:   { paddingTop: Spacing.md, paddingBottom: Spacing.sm },
   backBtnTxt:{ fontFamily: Fonts.rajdhani, fontSize: 15, color: Colors.dim },

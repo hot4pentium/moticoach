@@ -522,6 +522,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
     backgroundImage: 'radial-gradient(rgba(37,99,235,0.13) 1.5px, transparent 1.5px)' as any,
     backgroundSize: '22px 22px' as any,
+    overflow: 'hidden',
   },
 
   // Header

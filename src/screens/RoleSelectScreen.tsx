@@ -31,14 +31,14 @@ const ROLE_OPTIONS: RoleOption[] = [
   {
     role:      'supporter',
     label:     'SUPPORTER / PARENT',
-    desc:      'Follow your team, access Game Day Live, view the roster and playbook.',
+    desc:      'Follow your team, access Game Day Live, view the roster and player HYPE cards.',
     icon:      '📣',
     needsCode: true,
   },
   {
     role:      'athlete',
     label:     'ATHLETE',
-    desc:      'Join your team, track your own stats, and access all team content.',
+    desc:      'View your profile, stats, schedule, and message the team. Enter the code from your coach.',
     icon:      '⚡',
     needsCode: true,
   },
@@ -102,7 +102,7 @@ export default function RoleSelectScreen() {
 
       await setDoc(doc(db, 'users', user.uid), {
         role:        selected,
-        displayName: user.displayName ?? user.email?.split('@')[0] ?? 'Coach',
+        displayName: user.displayName ?? user.email?.split('@')[0] ?? (selected === 'coach' ? 'Coach' : selected === 'athlete' ? 'Athlete' : 'Supporter'),
         teamCode:    code,
         createdAt:   serverTimestamp(),
       });
