@@ -1,41 +1,46 @@
-# Current Sprint — Game Day Live + Org Demo Prep
+# Current Sprint — Layout Polish, PrepBook Review & Role Fixes
 
 ## What We Built
 
-### Game Day Live — Coach Access
-- `src/screens/DashboardScreen.tsx` — Added **Game Day** tool card (amber, `radio-outline` icon) to `DASH_TOOLS`
-- `src/navigation/index.tsx` — Registered `GameDayLive` in `DashboardTabStack` so coaches can reach it from the tools grid
+### PrepBook — Review Mode
+- `src/screens/PrepBookScreen.tsx` — Coaches/staff can now review previously saved PrepBook entries
+  - `PrepBookReview` component renders full saved prep: attendance grid (two-column player list with jersey/position, absent/injured badges), drill plan, scout notes, training focus, etc.
+  - **Print from review** — PRINT button in review header (web only) generates the same sideline sheet HTML as the completion print
+  - `reviewMode` + `reviewEntry` route params enable the screen to open in read-only review mode
 
-### Game Day Live — Engagement Upgrade
-- `src/screens/GameDayLiveScreen.tsx` — Major enhancements:
-  - **Fallback roster** (`DEMO_PLAYERS`) — 9 mock soccer players shown when Firestore `teams/{teamCode}/roster` is empty (e.g. demo team GG354)
-  - **Sport-specific cheer picker** — tapping a player opens a modal with 5 sport-specific cheers (soccer, basketball, football, baseball, volleyball). Closes on cheer tap; shoutout count increments.
-  - **Pulsing glow ring** — `Animated.loop` pulse behind the LIVE TAP button while session is active; stops on pause/end
-  - **Tap progress dots** — 3 dots above the button show progress toward the next cheer point (3 taps = 1 point)
-  - **Streak counter** — rapid taps within 1.5s build a streak; `🔥 N STREAK!` replaces hint text when streak ≥ 3; auto-clears after 2s
-  - **Player cell pop animation** — spring scale bounce on player cell when a cheer is sent
-  - `useCoach` imported for `coachSport` to drive sport-specific cheer lists
+### PrepBook — Completion Modal
+- `src/screens/PrepBookScreen.tsx` — After tapping CONFIRM READY on the final step, a modal congratulates the coach ("PREP LOCKED IN") and offers VIEW SAVED PREP or GOT IT
+- Prep snapshot saved to Firestore `teams/{teamCode}/prepBookEntries` with `serverTimestamp()`; a client-side copy with `Date.now()` is kept for immediate navigation without serialization issues
 
-### PrepBook — Print Sideline Sheet
-- `src/screens/PrepBookScreen.tsx` — Added **PRINT SIDELINE SHEET** button on the Final Check step (web only)
-  - **Game prep sheet**: Starters/Subs lineup with captain badge, absent/injured list, Game Focus priorities, Scout notes
-  - **Practice plan sheet**: Roster attendance (two-column present list + absent/injured), Drill plan with durations/notes, Training Focus themes, Equipment checklist
-  - Opens in a new browser tab with clean light-background HTML; `window.print()` fires after 300ms (allows print-to-paper or Save as PDF)
+### PrepBook — Picker UX Redesign
+- `src/screens/DashboardScreen.tsx` — `PrepBookPickerSheet` redesigned as a 3-state modal (`choice → new | previous`)
+  - **Choice view**: two large cards — START NEW PREP and REVIEW SAVED (with count pill, dimmed if no entries)
+  - **New sub-view**: existing event picker + fallback GAME PREP / PRACTICE PLAN buttons
+  - **Previous sub-view**: list of saved entries from Firestore `teams/{teamCode}/prepBookEntries`; tap navigates to PrepBook in reviewMode
+  - Back chip (`← BACK`) in sub-views returns to choice
+- `src/screens/SupporterHomeScreen.tsx` — Staff role now opens the same `PrepBookPickerSheet` (imported and wired via `picker: true` flag on ToolDef)
 
-### PrepBook — Event Picker (previously completed)
-- `src/screens/DashboardScreen.tsx` — `PrepBookPickerSheet` intercepts the Prep Book tools card tap
-  - Shows upcoming game/practice events; tap navigates to PrepBook with `eventType` + `eventTitle` params
-  - Fallback buttons: GAME PREP (amber) / PRACTICE PLAN (green) for prep without a specific event
+### Athlete Role — Self-Signup Restored
+- `src/screens/RoleSelectScreen.tsx` — ATHLETE option re-added to `ROLE_OPTIONS` with icon, description, and team code entry
+- `displayName` fallback correctly resolves to `'Athlete'` for athlete role
 
-### Stat Tracker — Navigation Fix (previously completed)
-- `src/screens/StatTrackerSummaryScreen.tsx` — SAVE & EXIT and EXIT WITHOUT SAVING buttons now use `navigation.popToTop()` (was `navigate('Tabs')` which silently failed in CoachTabs context)
+### Game Day Live — Demo Account Always Fresh
+- `src/screens/GameDayLiveScreen.tsx` — `testcoach@mail.com` bypasses the per-day localStorage gate
+  - `isDemo` flag derived from `user?.email`
+  - Mount effect skips `already_done` check for demo account
+  - Session-end handler skips writing the gate key for demo account
+  - Firestore upload still runs normally (engagement data is saved)
 
-### Demo Layer — testcoach@mail.com Full Access
-- Firestore `teams/GG354` — `isPaid: true` set via REST API (unlocks PrepBook, individual stat tracking, all paid features)
-- `src/screens/DemoCoachesScreen.tsx` — 3 interactive sub-levels added to coach-view Quick Actions:
-  - `playbook` — 6 demo plays with filter tabs and field thumbnails
-  - `stat-demo` — live score bar + 6 stat tiles + tappable player rows with ✓ RECORDED flash
-  - `live-taps` — animated LIVE TAP button + 9-player shoutout grid
+### Layout — Web Centering & Horizontal Scroll Fix
+- **Root cause**: React Native Web defaults to `overflow: 'visible'` on all Views; any slightly-overflowing element made the entire page horizontally scrollable
+- **Fix applied to all screens**: Added `overflow: 'hidden'` to root container style in every screen missing it:
+  - `StatTrackerSummaryScreen`, `AchievementsScreen`, `ChatScreen`, `DMListScreen`, `DMConversationScreen`, `NewDMScreen`, `AuthScreen`, `StatTrackerSetupScreen`, `StatTrackerLiveScreen`, `RosterScreen`
+- **StatTrackerLiveScreen bars** — Applied outer/inner centering wrapper (`maxWidth: 800, alignSelf: 'center'`) to:
+  - Period bar → `periodBarInner`
+  - Scoreboard → `scoreboardInner`
+  - Controls → `controlsInner`
+- **GameDayLiveScreen header** — Same outer/inner centering pattern; `headerInner` constrains BACK + PAUSE/RESUME to 800px
+- **GameDayLiveScreen root** — `overflow: 'hidden'` added to `safe` container (this also fixed the header scrolling off-screen on web)
 
 ---
 
@@ -45,26 +50,37 @@
 |---|---|---|
 | `teams/GG354` | `isPaid: true` | Enables paid features for demo coach |
 | `teams/{teamCode}/gameEngagements` | Write on session end | Stores liveTaps, livePoints, shoutouts, sessionDurationSec |
+| `teams/{teamCode}/prepBookEntries` | Write on prep completion | Saves full prep snapshot for review |
 
 ---
 
 ## Files Modified This Sprint
 
-| File | Status | Notes |
-|---|---|---|
-| `src/screens/GameDayLiveScreen.tsx` | Modified | Fallback roster, cheer picker, animations, streak |
-| `src/screens/DashboardScreen.tsx` | Modified | Game Day tool card + PrepBook event picker |
-| `src/screens/PrepBookScreen.tsx` | Modified | Print sideline sheet (game + practice) |
-| `src/screens/StatTrackerSummaryScreen.tsx` | Modified | `popToTop()` navigation fix |
-| `src/screens/DemoCoachesScreen.tsx` | Modified | 3 new interactive demo sub-levels |
-| `src/navigation/index.tsx` | Modified | GameDayLive registered in DashboardTabStack |
+| File | Notes |
+|---|---|
+| `src/screens/GameDayLiveScreen.tsx` | Demo gate bypass, header centering, overflow fix |
+| `src/screens/PrepBookScreen.tsx` | Review mode, completion modal, print from review, full roster grid |
+| `src/screens/DashboardScreen.tsx` | PrepBookPickerSheet redesign (choice/new/previous states) |
+| `src/screens/SupporterHomeScreen.tsx` | Staff Prep Book opens picker sheet |
+| `src/screens/RoleSelectScreen.tsx` | Athlete role restored to sign-up options |
+| `src/screens/StatTrackerLiveScreen.tsx` | overflow fix, period bar / scoreboard / controls centering |
+| `src/screens/StatTrackerSummaryScreen.tsx` | overflow fix |
+| `src/screens/AchievementsScreen.tsx` | overflow fix |
+| `src/screens/ChatScreen.tsx` | overflow fix |
+| `src/screens/DMListScreen.tsx` | overflow fix |
+| `src/screens/DMConversationScreen.tsx` | overflow fix |
+| `src/screens/NewDMScreen.tsx` | overflow fix |
+| `src/screens/AuthScreen.tsx` | overflow fix |
+| `src/screens/StatTrackerSetupScreen.tsx` | overflow fix |
+| `src/screens/RosterScreen.tsx` | overflow fix |
 
 ---
 
 ## Open / Next Steps
 
-- **Athlete self-signup removed** — `ROLE_OPTIONS` in `RoleSelectScreen.tsx` only has coach + supporter. Navigation still handles existing athlete accounts. Decision pending: restore self-signup or keep admin-provisioned only.
 - Wire HYPE cards to real Firestore roster data (currently mock)
 - Add Firestore security rules for `teams/{teamCode}/gameEngagements` (write: supporter/staff; read: team members)
+- Add Firestore security rules for `teams/{teamCode}/prepBookEntries` (write/read: coach/staff)
 - Roster card JERSEY/POSITION data is placeholder (`#--`, `—`) — needs Firestore wire-up
 - `hype-card.html` prototype can be retired once the in-app version is fully wired
+- PrepBook review: add delete/archive capability for old entries

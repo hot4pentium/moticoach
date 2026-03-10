@@ -394,7 +394,7 @@ export default function Navigation() {
   return (
     <View style={{ flex: 1 }}>
       <UpdateBanner />
-      <NavigationContainer>
+      <NavigationContainer documentTitle={{ formatter: () => 'LeagueMatrix' }}>
         <AuthGate />
       </NavigationContainer>
     </View>
